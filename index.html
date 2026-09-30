@@ -1,0 +1,1327 @@
+<!DOCTYPE html>
+<html lang="kk">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<meta name="mobile-web-app-capable" content="yes">
+<title>Зертханадан қашу — Электр тізбегі 3D</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Oswald:wght@500;700&family=Rubik:wght@400;500;700&family=PT+Mono&display=swap" rel="stylesheet">
+<script src="three.min.js"></script>
+<script>if(!window.THREE) document.write('<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"><\/script>');</script>
+<script src="qrcode.min.js"></script>
+<script>if(!window.QRCode) document.write('<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"><\/script>');</script>
+<script src="peerjs.min.js"></script>
+<script>if(!window.Peer) document.write('<script src="https://cdnjs.cloudflare.com/ajax/libs/peerjs/1.5.4/peerjs.min.js"><\/script>');</script>
+<style>
+:root{
+  --ink:#e9e4d8; --muted:#95a0ad; --amber:#f2b134; --amber2:#ffd166;
+  --red:#e5484d; --green:#3ddc84; --panel:#0e1219; --line:rgba(255,255,255,.09);
+  --sans:'Rubik','Segoe UI',system-ui,sans-serif; --head:'Oswald','Segoe UI',sans-serif; --mono:'PT Mono','Consolas',monospace;
+}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%;overflow:hidden;background:#05070b;color:var(--ink);font-family:var(--sans)}
+button{font-family:inherit;cursor:pointer}
+.hidden{display:none!important}
+#gl{position:fixed;inset:0;display:block;touch-action:none;-webkit-user-select:none;user-select:none}
+/* ---------- сенсорлық басқару ---------- */
+#touch{position:absolute;inset:0;pointer-events:none}
+#joy{position:absolute;left:max(22px,env(safe-area-inset-left));bottom:max(22px,env(safe-area-inset-bottom));width:140px;height:140px;border-radius:50%;background:rgba(8,10,16,.45);border:2px solid rgba(255,255,255,.18);pointer-events:auto;touch-action:none;backdrop-filter:blur(4px)}
+#joy::before{content:'';position:absolute;inset:26px;border-radius:50%;border:1px dashed rgba(255,255,255,.15)}
+#joyKnob{position:absolute;left:50%;top:50%;width:60px;height:60px;margin:-30px;border-radius:50%;background:radial-gradient(circle at 35% 35%,#ffd97a,#d99a1c);box-shadow:0 4px 12px rgba(0,0,0,.5);pointer-events:none}
+#actBtn{position:absolute;right:max(22px,env(safe-area-inset-right));bottom:max(30px,env(safe-area-inset-bottom));width:92px;height:92px;border-radius:50%;background:rgba(242,177,52,.9);color:#1a1204;font-family:var(--head);font-size:34px;font-weight:700;display:flex;flex-direction:column;align-items:center;justify-content:center;line-height:1;pointer-events:auto;touch-action:none;box-shadow:0 6px 0 #9a6a10;user-select:none;-webkit-user-select:none}
+#actBtn span{font-size:11px;letter-spacing:.14em;margin-top:3px}
+#actBtn.hot{background:#ffd166;transform:scale(1.06)}
+#actBtn:active{transform:translateY(3px);box-shadow:0 2px 0 #9a6a10}
+#runBtn{position:absolute;right:max(132px,calc(env(safe-area-inset-right) + 110px));bottom:max(36px,env(safe-area-inset-bottom));width:60px;height:60px;border-radius:50%;background:rgba(8,10,16,.55);border:2px solid rgba(255,255,255,.2);color:#fff;font-family:var(--head);font-size:12px;letter-spacing:.08em;display:flex;align-items:center;justify-content:center;pointer-events:auto;touch-action:none;user-select:none}
+#runBtn.on{background:var(--amber);color:#1a1204}
+#hudBtns{position:absolute;right:max(14px,env(safe-area-inset-right));top:14px;display:flex;gap:8px;pointer-events:auto}
+#hudBtns button{width:40px;height:40px;border-radius:8px;border:1px solid var(--line);background:rgba(8,10,16,.7);color:#fff;font-size:18px;padding:0}
+#hudBtns button.on{border-color:var(--amber);color:var(--amber)}
+#rotateHint{position:fixed;inset:0;z-index:40;display:none;align-items:center;justify-content:center;background:#05070b;text-align:center;font-family:var(--head);font-size:22px;letter-spacing:.06em;padding:30px;line-height:1.5}
+@media (orientation:portrait) and (max-width:700px){ body.playing #rotateHint{display:flex} }
+#vignette{position:fixed;inset:0;pointer-events:none;background:radial-gradient(ellipse at center,transparent 50%,rgba(0,0,0,.6) 100%)}
+
+/* ---------- HUD ---------- */
+#hud{position:fixed;inset:0;pointer-events:none}
+#cross{position:absolute;left:50%;top:50%;width:6px;height:6px;margin:-3px;border-radius:50%;background:#fff;opacity:.85;box-shadow:0 0 0 1px rgba(0,0,0,.5);transition:transform .15s,background .15s}
+#cross.hot{transform:scale(2.3);background:var(--amber)}
+#prompt{position:absolute;left:50%;top:calc(50% + 30px);transform:translateX(-50%);font-family:var(--head);font-size:17px;letter-spacing:.05em;text-transform:uppercase;background:rgba(8,10,16,.8);padding:6px 14px;border-radius:3px;border-left:3px solid var(--amber);white-space:nowrap;opacity:0;transition:opacity .15s}
+#prompt.show{opacity:1}
+#prompt b{color:var(--amber);font-weight:700;margin-right:6px}
+#topbar{position:absolute;left:18px;top:18px;display:flex;flex-direction:column;gap:10px;width:330px;max-width:calc(100vw - 36px)}
+.hud-card{background:rgba(8,10,16,.72);backdrop-filter:blur(6px);border:1px solid var(--line);border-left:3px solid var(--amber);padding:10px 14px;border-radius:5px}
+.hud-title{font-family:var(--head);font-size:13px;letter-spacing:.2em;color:var(--muted)}
+.hud-timer{font-family:var(--mono);font-size:30px;line-height:1;color:#fff;margin-top:3px}
+#objectives{list-style:none;margin:0;padding:6px 14px;font-size:13px}
+#objectives li{padding:6px 0 6px 24px;position:relative;color:#c9ced6;border-bottom:1px dashed var(--line)}
+#objectives li:last-child{border-bottom:0}
+#objectives li::before{content:'';position:absolute;left:0;top:8px;width:13px;height:13px;border:1.5px solid var(--muted);border-radius:3px}
+#objectives li.done{color:#6a7481;text-decoration:line-through}
+#objectives li.done::before{border-color:var(--green);background:var(--green);box-shadow:inset 0 0 0 2px #0a0f14}
+#objectives li.now{color:#fff}
+#objectives li.now::before{border-color:var(--amber);animation:blink 1.2s infinite}
+@keyframes blink{50%{opacity:.25}}
+#controls-hint{position:absolute;right:18px;bottom:18px;font-size:12px;color:var(--muted);background:rgba(8,10,16,.6);padding:6px 10px;border-radius:4px;transition:opacity 1.5s}
+#toast{position:absolute;left:50%;bottom:70px;transform:translateX(-50%);background:rgba(8,10,16,.88);border:1px solid var(--line);border-left:3px solid var(--amber);padding:10px 18px;border-radius:5px;font-size:15px;opacity:0;transition:opacity .25s;max-width:80vw;text-align:center}
+#toast.show{opacity:1}
+#paused{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,.5);font-family:var(--head);font-size:24px;letter-spacing:.1em;pointer-events:auto;cursor:pointer;text-transform:uppercase}
+
+/* ---------- overlays ---------- */
+.overlay{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;background:rgba(3,5,9,.84);z-index:10;padding:16px;overflow:auto}
+.card{position:relative;background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:34px 38px;max-width:560px;width:100%;box-shadow:0 30px 80px rgba(0,0,0,.6)}
+.card::before{content:'';position:absolute;left:0;top:26px;bottom:26px;width:4px;background:var(--amber);border-radius:0 3px 3px 0}
+.eyebrow{font-family:var(--head);font-size:12px;letter-spacing:.24em;text-transform:uppercase;color:var(--muted)}
+.card h1{font-family:var(--head);font-weight:700;font-size:56px;line-height:.95;margin:8px 0 18px;letter-spacing:.01em;color:#fff}
+.card h1 span{color:var(--amber)}
+.story{font-size:15.5px;line-height:1.55;color:#cfd3da;margin:0 0 20px}
+.sticker{position:absolute;right:26px;top:-14px;transform:rotate(4deg);background:var(--amber);color:#1a1204;font-family:var(--head);font-size:12px;letter-spacing:.14em;padding:5px 10px;border-radius:3px;box-shadow:0 4px 10px rgba(0,0,0,.4)}
+.keys{display:grid;grid-template-columns:1fr 1fr;gap:8px 18px;font-size:13.5px;color:#aeb5bf;margin:0 0 24px}
+.keys kbd{display:inline-block;font-family:var(--mono);font-size:12px;background:#1b2130;border:1px solid #33405a;border-bottom-width:3px;border-radius:4px;padding:2px 7px;color:#fff;margin-right:6px}
+.btn{background:var(--amber);color:#1a1204;border:0;border-radius:6px;padding:14px 22px;font-family:var(--head);font-size:17px;letter-spacing:.1em;text-transform:uppercase;transition:transform .12s,box-shadow .12s;box-shadow:0 6px 0 #9a6a10}
+.btn:hover{transform:translateY(-2px);box-shadow:0 8px 0 #9a6a10}
+.btn:active{transform:translateY(3px);box-shadow:0 2px 0 #9a6a10}
+.btn.ghost{background:transparent;color:var(--ink);border:1px solid var(--line);box-shadow:none;font-size:14px}
+.btn.ghost:hover{background:rgba(255,255,255,.06);transform:none}
+.fine{font-size:12px;color:#6f7986;margin-top:16px;line-height:1.5}
+.circuit-svg{display:block;margin:0 0 14px;width:100%;max-width:260px}
+
+/* ---------- bench ---------- */
+#bench{padding:10px}
+.bench-wrap{width:min(1120px,100%);background:
+  linear-gradient(rgba(0,0,0,.25),rgba(0,0,0,.25)),
+  repeating-linear-gradient(90deg,#6f4b2c 0 22px,#78522f 22px 40px,#684325 40px 61px,#74502e 61px 80px);
+  border-radius:12px;padding:12px 14px 12px;box-shadow:0 30px 80px rgba(0,0,0,.7),inset 0 1px 0 rgba(255,255,255,.12)}
+.bench-head{display:flex;justify-content:space-between;gap:16px;align-items:flex-start;padding:4px 6px 10px;flex-wrap:wrap}
+.bench-task{font-size:15px;line-height:1.4;color:#fff;max-width:720px;margin-top:2px}
+.bench-vals{font-family:var(--mono);font-size:14px;color:#ffe2a8;background:rgba(0,0,0,.35);padding:8px 12px;border-radius:5px;white-space:nowrap}
+#benchCanvas{display:block;width:100%;max-height:calc(100vh - 210px);aspect-ratio:1100/620;object-fit:contain;border-radius:8px;box-shadow:0 10px 30px rgba(0,0,0,.5);cursor:crosshair;touch-action:none}
+.bench-foot{display:flex;justify-content:space-between;align-items:center;gap:14px;padding:10px 6px 2px;flex-wrap:wrap}
+.bench-hint{font-size:12.5px;color:#f1e3c8;max-width:640px;line-height:1.45}
+.bench-btns{display:flex;gap:8px}
+
+/* ---------- computer ---------- */
+.crt{width:min(720px,100%);background:#1c1f24;border-radius:18px;padding:22px;box-shadow:0 30px 80px rgba(0,0,0,.7),inset 0 0 0 2px #2c3037}
+.crt-screen{position:relative;background:#04110a;border-radius:10px;padding:26px 28px;min-height:380px;color:#7cf59a;font-family:var(--mono);font-size:15px;line-height:1.55;text-shadow:0 0 6px rgba(124,245,154,.55);overflow:hidden;animation:crt-on .4s ease-out}
+.crt-screen::after{content:'';position:absolute;inset:0;pointer-events:none;background:repeating-linear-gradient(0deg,rgba(0,0,0,.22) 0 2px,transparent 2px 4px);mix-blend-mode:multiply}
+.crt-screen::before{content:'';position:absolute;inset:0;pointer-events:none;background:radial-gradient(ellipse at center,transparent 60%,rgba(0,0,0,.45) 100%)}
+@keyframes crt-on{0%{transform:scaleY(.02);filter:brightness(4)}60%{transform:scaleY(1.02)}100%{transform:scaleY(1)}}
+#pcText{margin:0;white-space:pre-wrap;font-family:inherit}
+#pcText .hl{color:#fff;text-shadow:0 0 8px #fff}
+#pcText .dim{color:#3f9a58}
+#pcText .red{color:#ff6b6b;text-shadow:0 0 8px rgba(255,107,107,.6)}
+#pcText .ok{color:#b7ffcb}
+.pc-row{display:flex;align-items:center;gap:10px;margin-top:14px;flex-wrap:wrap}
+#codeInput{flex:1;min-width:140px;background:#062012;border:1px solid #2f8a4c;color:#fff;font-family:var(--mono);font-size:22px;padding:8px 12px;border-radius:4px;outline:none;letter-spacing:.08em}
+#codeInput:focus{box-shadow:0 0 0 2px rgba(124,245,154,.35)}
+.pc-btn{background:#1d6d38;color:#e6ffee;border:1px solid #3ec46a;font-family:var(--mono);font-size:15px;padding:10px 16px;border-radius:4px;letter-spacing:.06em}
+.pc-btn:hover{background:#268a47}
+.pc-btn.sub{background:transparent;border-color:#2f5a3c;color:#8fd3a2}
+.pc-btn.pulse{animation:blink 1s infinite}
+#pcMsg{min-height:24px;margin-top:10px;font-size:15px}
+#pcMsg.err{color:#ff6b6b}
+#pcMsg.ok{color:#fff}
+#pcHint{margin-top:8px;color:#ffe08a;text-shadow:0 0 6px rgba(255,224,138,.5);display:none;border-top:1px dashed #2f5a3c;padding-top:8px}
+.pc-foot{display:flex;justify-content:space-between;margin-top:18px;gap:8px;flex-wrap:wrap}
+.shake{animation:shake .45s}
+@keyframes shake{0%,100%{transform:translateX(0)}20%,60%{transform:translateX(-10px)}40%,80%{transform:translateX(10px)}}
+
+/* ---------- win ---------- */
+.win-stats{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin:6px 0 18px}
+.win-stats div{background:#151b26;border:1px solid var(--line);border-radius:6px;padding:10px 12px}
+.win-stats span{display:block;font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--muted)}
+.win-stats b{font-family:var(--mono);font-size:22px;color:#fff}
+.win-expl{background:#151b26;border-left:3px solid var(--green);padding:12px 14px;border-radius:0 6px 6px 0;margin-bottom:22px}
+.win-expl p{margin:6px 0 0;font-size:14.5px;line-height:1.55;color:#d7dce4}
+.stars{color:var(--amber);font-size:22px;letter-spacing:.1em;margin:4px 0 14px}
+#nothree{position:fixed;inset:0;display:none;align-items:center;justify-content:center;background:#05070b;z-index:50;text-align:center;padding:20px;font-size:16px;line-height:1.6}
+
+/* ---------- QR / телефонмен қосылу ---------- */
+#remote .card{max-width:640px}
+.qr-row{display:flex;gap:22px;align-items:center;flex-wrap:wrap;margin:14px 0 8px}
+#qr{background:#fff;padding:12px;border-radius:8px;width:236px;height:236px;box-sizing:content-box;display:flex;align-items:center;justify-content:center}
+#qr img,#qr canvas{display:block}
+.room-code{font-family:var(--mono);font-size:44px;letter-spacing:.2em;color:#fff;background:#151b26;border:1px dashed var(--amber);padding:8px 16px;border-radius:8px;display:inline-block}
+.room-url{font-family:var(--mono);font-size:13px;color:#9fb0c2;word-break:break-all;margin-top:10px}
+.net-status{font-size:13px;color:var(--muted);margin-top:8px}
+.net-status b{color:var(--green)}
+.net-warn{background:#3a2210;border-left:3px solid var(--amber);color:#ffe0b0;padding:10px 12px;border-radius:0 6px 6px 0;font-size:13px;line-height:1.5;margin-top:12px}
+.steps{font-size:13.5px;color:#cfd3da;line-height:1.6;padding-left:18px;margin:6px 0 0}
+
+/* ---------- телефон-джойстик (controller) режимі ---------- */
+body.ctrl #gl,body.ctrl #vignette,body.ctrl #hud,body.ctrl #intro{display:none!important}
+#ctrl{position:fixed;inset:0;background:#0b0f19;display:none;flex-direction:column;touch-action:none;user-select:none;-webkit-user-select:none;overflow:hidden}
+body.ctrl #ctrl{display:flex}
+.c-top{display:flex;justify-content:space-between;align-items:center;padding:8px 14px;background:#0e1219;border-bottom:1px solid var(--line);font-family:var(--head);letter-spacing:.08em;font-size:13px;text-transform:uppercase;color:var(--muted)}
+.c-top .dot{display:inline-block;width:9px;height:9px;border-radius:50%;background:var(--red);margin-right:6px;vertical-align:middle}
+.c-top .dot.on{background:var(--green);box-shadow:0 0 8px var(--green)}
+.c-top b{color:#fff;font-family:var(--mono);letter-spacing:.2em}
+.c-pane{flex:1;position:relative;display:none}
+.c-pane.on{display:block}
+#cWait{display:none;align-items:center;justify-content:center;text-align:center;padding:24px;line-height:1.6;color:#cfd3da}
+#cWait.on{display:flex}
+#cWait h2{font-family:var(--head);font-size:30px;margin:0 0 8px;color:#fff;letter-spacing:.04em}
+#cStart{margin-top:18px}
+#cPrompt{position:absolute;left:50%;top:12px;transform:translateX(-50%);font-family:var(--head);font-size:15px;letter-spacing:.05em;text-transform:uppercase;background:rgba(8,10,16,.8);padding:6px 14px;border-radius:3px;border-left:3px solid var(--amber);white-space:nowrap;max-width:90%;overflow:hidden;text-overflow:ellipsis;opacity:0;transition:opacity .15s;pointer-events:none}
+#cPrompt.show{opacity:1}
+#cPrompt b{color:var(--amber);margin-right:6px}
+#cLook{position:absolute;inset:0;background:radial-gradient(ellipse at 70% 50%,rgba(242,177,52,.06),transparent 60%)}
+#cLook::after{content:'← сүйреп қара →';position:absolute;right:18px;top:50%;transform:translateY(-50%);color:rgba(255,255,255,.18);font-family:var(--head);letter-spacing:.1em;font-size:13px;text-transform:uppercase;pointer-events:none}
+#cJoy{position:absolute;left:max(24px,env(safe-area-inset-left));bottom:max(24px,env(safe-area-inset-bottom));width:150px;height:150px;border-radius:50%;background:rgba(255,255,255,.06);border:2px solid rgba(255,255,255,.18);touch-action:none}
+#cJoy::before{content:'';position:absolute;inset:28px;border-radius:50%;border:1px dashed rgba(255,255,255,.15)}
+#cKnob{position:absolute;left:50%;top:50%;width:64px;height:64px;margin:-32px;border-radius:50%;background:radial-gradient(circle at 35% 35%,#ffd97a,#d99a1c);box-shadow:0 4px 12px rgba(0,0,0,.5);pointer-events:none}
+#cAct{position:absolute;right:max(24px,env(safe-area-inset-right));bottom:max(30px,env(safe-area-inset-bottom));width:96px;height:96px;border-radius:50%;background:rgba(242,177,52,.9);color:#1a1204;font-family:var(--head);font-size:36px;font-weight:700;display:flex;flex-direction:column;align-items:center;justify-content:center;line-height:1;box-shadow:0 6px 0 #9a6a10;touch-action:none}
+#cAct span{font-size:11px;letter-spacing:.14em;margin-top:3px}
+#cAct.hot{background:#ffd166;transform:scale(1.06)}
+#cRun{position:absolute;right:max(140px,calc(env(safe-area-inset-right) + 116px));bottom:max(38px,env(safe-area-inset-bottom));width:62px;height:62px;border-radius:50%;background:rgba(8,10,16,.55);border:2px solid rgba(255,255,255,.2);color:#fff;font-family:var(--head);font-size:12px;letter-spacing:.08em;display:flex;align-items:center;justify-content:center;touch-action:none}
+#cRun.on{background:var(--amber);color:#1a1204}
+.c-hint{position:absolute;left:50%;bottom:10px;transform:translateX(-50%);font-size:11px;color:rgba(255,255,255,.35);white-space:nowrap;pointer-events:none}
+body.ctrl #bench,body.ctrl #pc,body.ctrl #win{z-index:30}
+body.ctrl #rotateHint{display:none!important}
+
+@media (max-width:640px){
+  .card{padding:26px 22px}.card h1{font-size:40px}.keys{grid-template-columns:1fr}
+  .win-stats{grid-template-columns:1fr 1fr}
+}
+/* телефон / кіші панель: ықшам HUD */
+@media (max-width:900px), (max-height:520px){
+  #topbar{width:auto;max-width:56vw;gap:6px;left:12px;top:12px}
+  .hud-card{padding:6px 10px}
+  .hud-title{font-size:10px}.hud-timer{font-size:20px}
+  #objectives{padding:4px 10px;font-size:12px}
+  #objectives li:not(.now){display:none}
+  #objectives li{border-bottom:0;padding:4px 0 4px 22px}
+  #controls-hint{display:none}
+  #prompt{font-size:14px;top:calc(50% + 24px)}
+  #toast{bottom:auto;top:70px;font-size:13px;padding:8px 12px;max-width:70vw}
+  .bench-wrap{padding:8px 8px 6px;border-radius:8px}
+  .bench-head{padding:0 4px 6px;gap:8px}
+  .bench-task{font-size:12px;line-height:1.3}
+  .bench-vals{font-size:12px;padding:5px 8px}
+  .bench-hint{display:none}
+  .bench-foot{padding:6px 2px 0}
+  .bench-foot .btn{padding:9px 12px;font-size:12px}
+  #benchCanvas{max-height:calc(100vh - 150px)}
+  .crt{padding:10px;border-radius:12px}
+  .crt-screen{padding:14px 14px;min-height:0;font-size:12.5px;line-height:1.45}
+  #codeInput{font-size:18px;padding:6px 10px}
+  .pc-btn{font-size:13px;padding:8px 12px}
+  .overlay{padding:8px}
+}
+</style>
+</head>
+<body>
+<canvas id="gl"></canvas>
+<div id="vignette"></div>
+
+<div id="hud" class="hidden">
+  <div id="cross"></div>
+  <div id="prompt"></div>
+  <div id="topbar">
+    <div class="hud-card">
+      <div class="hud-title">ЗЕРТХАНАДАН ҚАШУ</div>
+      <div class="hud-timer" id="timer">00:00</div>
+    </div>
+    <ul id="objectives" class="hud-card">
+      <li data-o="light">Қабырғадағы ажыратқышпен жарықты жақ</li>
+      <li data-o="read">Компьютердегі тапсырманы оқы</li>
+      <li data-o="build">Үстелде тізбекті құрастырып, көрсеткішті оқы</li>
+      <li data-o="code">Кодты компьютерге енгіз</li>
+      <li data-o="exit">Есіктен шық</li>
+    </ul>
+  </div>
+  <div id="controls-hint"><b>W A S D</b> — жүру · тінтуір — қарау · <b>E</b> / басу — әрекет · <b>Shift</b> — жүгіру</div>
+  <div id="toast"></div>
+  <div id="hudBtns">
+    <button id="remoteBtn" title="Телефонмен басқару (QR)">📱</button>
+    <button id="ctlBtn" title="Экрандық басқару (джойстик)">🎮</button>
+    <button id="fsBtn" title="Толық экран">⛶</button>
+  </div>
+  <div id="touch" class="hidden">
+    <div id="joy"><div id="joyKnob"></div></div>
+    <div id="runBtn">ЖҮГІРУ</div>
+    <div id="actBtn">E<span>ӘРЕКЕТ</span></div>
+  </div>
+  <div id="paused" class="hidden">Жалғастыру үшін экранды бас</div>
+</div>
+<div id="rotateHint">📱<br>Телефонды көлденең ұстаңыз</div>
+
+<div id="intro" class="overlay">
+  <div class="card">
+    <div class="sticker">ТҮН · КАБИНЕТ №12</div>
+    <div class="eyebrow">Физика · Электр тізбегі · 3D-квест</div>
+    <h1>ЗЕРТХАНАДАН<br><span>ҚАШУ</span></h1>
+    <svg class="circuit-svg" viewBox="0 0 260 70" fill="none" stroke="#f2b134" stroke-width="2.2" stroke-linecap="round">
+      <path d="M20 35 H70 M110 35 H150 M190 35 H240 M240 35 V60 H20 V35"/>
+      <path d="M70 22 V48 M78 28 V42 M86 22 V48 M94 28 V42" stroke-width="3"/>
+      <circle cx="170" cy="35" r="16"/><path d="M160 25 L180 45 M180 25 L160 45"/>
+      <path d="M102 35 h8" stroke-dasharray="2 3"/>
+      <circle cx="20" cy="35" r="3" fill="#f2b134"/><circle cx="240" cy="35" r="3" fill="#f2b134"/>
+    </svg>
+    <p class="story">Түн. Сен физика кабинетінде қалып қойдың — есік электронды құлыппен жабылған. Құлыптың коды — стол үстіндегі компьютердегі тапсырманың жауабы. Жарықты жақ, үстелдегі шамдарды, аккумуляторды және өлшеуіш аспаптарды сыммен жалғап тізбек құрастыр, санды тап та, компьютерге енгіз.</p>
+    <div class="keys">
+      <div><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> жүру</div>
+      <div><kbd>Тінтуір</kbd> айналып қарау</div>
+      <div><kbd>E</kbd> немесе <kbd>Басу</kbd> әрекет</div>
+      <div><kbd>Esc</kbd> тінтуірді босату / жабу</div>
+    </div>
+    <div class="keys" style="border-top:1px dashed var(--line);padding-top:12px">
+      <div>📱 <b>Телефон / сенсорлық панель:</b></div>
+      <div><kbd>Джойстик</kbd> жүру (сол жақ төменде)</div>
+      <div><kbd>Сүйреу</kbd> экранды сүйреп қарау</div>
+      <div><kbd>Түрту</kbd> затқа түрту немесе <kbd>E</kbd> батырмасы</div>
+    </div>
+    <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center">
+      <button id="startBtn" class="btn">Ойынды бастау</button>
+      <button id="remoteBtn2" class="btn ghost">📱 Телефон-джойстик (QR)</button>
+    </div>
+    <div class="fine">Компьютерде, планшетте, телефонда немесе интерактивті панельде Chrome / Edge / Firefox арқылы ойнауға болады. Телефонды көлденең ұстаңыз. Тінтуірмен ойнағанда «🎮» батырмасы экрандық джойстикті қосады.</div>
+  </div>
+</div>
+
+<div id="bench" class="overlay hidden">
+  <div class="bench-wrap">
+    <div class="bench-head">
+      <div><div class="eyebrow" style="color:#ffd8a0">Жұмыс үстелі · тапсырма</div><div class="bench-task" id="benchTask"></div></div>
+      <div class="bench-vals" id="benchVals"></div>
+    </div>
+    <canvas id="benchCanvas" width="1100" height="620"></canvas>
+    <div class="bench-foot">
+      <div class="bench-hint">Клемманы (сары дөңгелек) басып ұстап, екінші клеммаға сүйре — сым тартылады. Сымды алып тастау үшін оны бас. Аспаптарды сүйреп жылжытуға болады. Амперметр — тізбектей, вольтметр — параллель қосылады.</div>
+      <div class="bench-btns"><button id="benchClear" class="btn ghost">Сымдарды алып тастау</button><button id="benchClose" class="btn ghost">Үстелден тұру [Esc]</button></div>
+    </div>
+  </div>
+</div>
+
+<div id="pc" class="overlay hidden">
+  <div class="crt">
+    <div class="crt-screen">
+      <pre id="pcText"></pre>
+      <div class="pc-row"><span>КОД&gt;</span><input id="codeInput" inputmode="decimal" autocomplete="off" placeholder="санды енгіз"><button id="codeBtn" class="pc-btn">ЕНГІЗУ ⏎</button></div>
+      <div id="pcMsg"></div>
+      <div id="pcHint"></div>
+      <div class="pc-foot"><button id="hintBtn" class="pc-btn sub">? Кеңес алу</button><button id="pcClose" class="pc-btn sub">Компьютерден кету [Esc]</button></div>
+    </div>
+  </div>
+</div>
+
+<div id="win" class="overlay hidden">
+  <div class="card">
+    <div class="eyebrow">Миссия орындалды</div>
+    <h1>СЕН <span>ҚҰТЫЛДЫҢ!</span></h1>
+    <div class="stars" id="winStars"></div>
+    <div class="win-stats">
+      <div><span>Уақыт</span><b id="winTime">—</b></div>
+      <div><span>Әрекет</span><b id="winTries">—</b></div>
+      <div><span>Кеңес</span><b id="winHints">—</b></div>
+    </div>
+    <div class="win-expl"><div class="eyebrow">Есептің шешімі</div><p id="winExpl"></p></div>
+    <button id="againBtn" class="btn">Қайта ойнау · жаңа тапсырма</button>
+  </div>
+</div>
+
+<div id="remote" class="overlay hidden">
+  <div class="card">
+    <div class="eyebrow">Телефонмен басқару</div>
+    <h1 style="font-size:36px">ТЕЛЕФОН-<span>ДЖОЙСТИК</span></h1>
+    <div class="qr-row">
+      <div id="qr"></div>
+      <div>
+        <div class="eyebrow">Бөлме коды</div>
+        <div class="room-code" id="roomCode">----</div>
+        <div class="room-url" id="roomUrl"></div>
+        <div class="net-status" id="netStatus">Байланыс арнасы ізделуде…</div>
+      </div>
+    </div>
+    <div id="netWarn" class="net-warn hidden"></div>
+    <ol class="steps">
+      <li>Телефон осы Wi-Fi желісіне қосылған болуы керек.</li>
+      <li>Камерамен QR кодты сканерлеп, ашылған сілтемеге өтіңіз.</li>
+      <li>Телефонда джойстик пайда болады — ойын осы экранда жүреді.</li>
+    </ol>
+    <div style="display:flex;gap:10px;margin-top:20px;flex-wrap:wrap">
+      <button id="remoteClose" class="btn">Жабу</button>
+      <button id="remoteNew" class="btn ghost">Жаңа код</button>
+    </div>
+  </div>
+</div>
+
+<div id="ctrl">
+  <div class="c-top"><span><span class="dot" id="cDot"></span><span id="cStatus">қосылуда…</span></span><span>Бөлме <b id="cRoom">----</b></span></div>
+  <div id="cWait" class="c-pane">
+    <div>
+      <h2 id="cWaitTitle">Қосылуда…</h2>
+      <div id="cWaitText">Үлкен экрандағы ойынға қосылып жатырмыз.</div>
+      <button id="cStart" class="btn hidden">▶ Ойынды бастау</button>
+    </div>
+  </div>
+  <div id="cPlay" class="c-pane">
+    <div id="cLook"></div>
+    <div id="cPrompt"></div>
+    <div id="cJoy"><div id="cKnob"></div></div>
+    <div id="cRun">ЖҮГІРУ</div>
+    <div id="cAct">E<span>ӘРЕКЕТ</span></div>
+    <div class="c-hint">Сол жақ — жүру · оң жақты сүйреу — қарау · E — әрекет</div>
+  </div>
+</div>
+
+<div id="nothree">three.js кітапханасы жүктелмеді.<br>Интернет байланысын тексеріп, бетті қайта ашыңыз.</div>
+
+<script>
+(function(){
+'use strict';
+if(typeof THREE==='undefined'&&!/c=/.test(location.hash)){ document.getElementById('nothree').style.display='flex'; return; }
+
+const $=s=>document.querySelector(s);
+const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
+const lerp=(a,b,t)=>a+(b-a)*t;
+const rnd=a=>a[Math.floor(Math.random()*a.length)];
+const dec=(v,d)=>(d>0?v.toFixed(d).replace(/\.?0+$/,''):v.toFixed(0)).replace('.',',');
+const pad=n=>String(n).padStart(2,'0');
+const FONT="'Rubik','Segoe UI',sans-serif";
+const MONO="'PT Mono','Consolas',monospace";
+const IS_TOUCH=('ontouchstart' in window)||navigator.maxTouchPoints>0;
+const IS_SMALL=Math.min(screen.width,screen.height)<700;
+
+/* ================= ТАПСЫРМА ================= */
+function makeTask(){
+  const Es=[6,9,12], Rs=[2,3,4,6,8,12], types=['series_I','series_U2','parallel_I','parallel_I1'];
+  for(let k=0;k<3000;k++){
+    const E=rnd(Es), R1=rnd(Rs), R2=rnd(Rs), type=rnd(types);
+    if(R1===R2) continue;
+    const Rs2=R1+R2;
+    let ans, ok=false, unit, ask, expl, mode, hint;
+    if(type==='series_I'){
+      ans=E*1000/Rs2; ok=Number.isInteger(ans); unit='мА'; mode='ТІЗБЕКТЕЙ';
+      ask='Екі шамды батареяға ТІЗБЕКТЕЙ жалғаңыз. Тізбектегі ток күшінің мәні (мА) — есіктің коды. Оны амперметрмен өлшеңіз.';
+      expl=`Тізбектей жалғауда жалпы кедергі R = R₁ + R₂ = ${R1} + ${R2} = ${Rs2} Ом. Ом заңы бойынша I = U / R = ${E} / ${Rs2} = ${dec(ans/1000,3)} А = ${ans} мА.`;
+      hint='Тізбектей жалғауда ток күші барлық жерде бірдей: I = U / (R₁ + R₂). Амперметрді шамдармен бір тізбекке (тізбектей) қосыңыз. 1 А = 1000 мА.';
+    } else if(type==='series_U2'){
+      const raw=E*R2*10/Rs2; ok=Number.isInteger(raw); ans=raw/10; unit='В'; mode='ТІЗБЕКТЕЙ';
+      ask='Екі шамды батареяға ТІЗБЕКТЕЙ жалғаңыз. 2-шамдағы кернеу (В) — есіктің коды. Оны вольтметрмен өлшеңіз.';
+      expl=`Тізбектей жалғауда I = U / (R₁ + R₂) = ${E} / ${Rs2} = ${dec(E/Rs2,3)} А. 2-шамдағы кернеу U₂ = I · R₂ = ${dec(E/Rs2,3)} · ${R2} = ${dec(ans,1)} В.`;
+      hint='Тізбектей жалғауда кернеу шамдарға кедергісіне пропорционал бөлінеді: U₂ = I · R₂, мұндағы I = U / (R₁ + R₂). Вольтметрді 2-шамға параллель қосыңыз.';
+    } else if(type==='parallel_I'){
+      const i1=E*1000/R1, i2=E*1000/R2; ok=Number.isInteger(i1)&&Number.isInteger(i2); ans=i1+i2; unit='мА'; mode='ПАРАЛЛЕЛЬ';
+      ask='Екі шамды батареяға ПАРАЛЛЕЛЬ жалғаңыз. Батареядан өтетін жалпы ток күші (мА) — есіктің коды. Амперметрді батареяға жақын, негізгі тармаққа қосыңыз.';
+      expl=`Параллель жалғауда кернеу бірдей: U = ${E} В. I₁ = U / R₁ = ${E} / ${R1} = ${dec(i1/1000,3)} А, I₂ = U / R₂ = ${E} / ${R2} = ${dec(i2/1000,3)} А. Жалпы ток I = I₁ + I₂ = ${dec(ans/1000,3)} А = ${ans} мА.`;
+      hint='Параллель жалғауда әр шамдағы кернеу батарея кернеуіне тең. I₁ = U / R₁, I₂ = U / R₂, жалпы ток I = I₁ + I₂. 1 А = 1000 мА.';
+    } else {
+      ans=E*1000/R1; ok=Number.isInteger(ans); unit='мА'; mode='ПАРАЛЛЕЛЬ';
+      ask='Екі шамды батареяға ПАРАЛЛЕЛЬ жалғаңыз. 1-шамнан өтетін ток күші (мА) — есіктің коды. Амперметрді 1-шаммен тізбектей қосыңыз.';
+      expl=`Параллель жалғауда 1-шамдағы кернеу батарея кернеуіне тең: U₁ = ${E} В. I₁ = U₁ / R₁ = ${E} / ${R1} = ${dec(ans/1000,3)} А = ${ans} мА.`;
+      hint='Параллель жалғауда әр тармақтағы кернеу батарея кернеуіне тең. 1-шамның тогы: I₁ = U / R₁. Амперметр сол тармақтың ішінде (шаммен тізбектей) тұруы керек. 1 А = 1000 мА.';
+    }
+    if(ok) return {E,R1,R2,type,ans,unit,ask,expl,mode,hint};
+  }
+  return {E:12,R1:2,R2:6,type:'series_I',ans:1500,unit:'мА',mode:'ТІЗБЕКТЕЙ',
+    ask:'Екі шамды батареяға ТІЗБЕКТЕЙ жалғаңыз. Тізбектегі ток күшінің мәні (мА) — есіктің коды.',
+    expl:'R = 2 + 6 = 8 Ом, I = 12 / 8 = 1,5 А = 1500 мА.', hint:'I = U / (R₁ + R₂)'};
+}
+let TASK=makeTask();
+const CTRL_ROOM=(location.hash.match(/c=([A-Z0-9]{4})/i)||[])[1];
+const IS_CTRL=!!CTRL_ROOM;
+if(IS_CTRL) document.body.classList.add('ctrl');
+function checkCode(str){
+  const v=parseFloat(String(str).replace(',','.').replace(/\s/g,''));
+  if(!isFinite(v)) return false;
+  const tol=Math.max(Math.abs(TASK.ans)*0.012,0.06);
+  return Math.abs(v-TASK.ans)<=tol;
+}
+
+/* ================= ДЫБЫС ================= */
+let AC=null;
+function ac(){ if(!AC){ try{ AC=new (window.AudioContext||window.webkitAudioContext)(); }catch(e){} } if(AC&&AC.state==='suspended') AC.resume(); return AC; }
+function tone(f,dur,type,vol,when,slide){
+  const a=ac(); if(!a) return;
+  const o=a.createOscillator(), g=a.createGain(); const t0=a.currentTime+(when||0);
+  o.type=type||'square'; o.frequency.setValueAtTime(f,t0); if(slide) o.frequency.exponentialRampToValueAtTime(slide,t0+dur);
+  g.gain.setValueAtTime(vol||0.06,t0); g.gain.exponentialRampToValueAtTime(0.0001,t0+dur);
+  o.connect(g); g.connect(a.destination); o.start(t0); o.stop(t0+dur+0.05);
+}
+const SFX={
+  click:()=>{ tone(1900,0.035,'square',0.05); tone(900,0.05,'square',0.03,0.04); },
+  error:()=>{ tone(170,0.22,'sawtooth',0.07); tone(120,0.3,'sawtooth',0.06,0.18); },
+  ok:()=>{ [660,880,1320].forEach((f,i)=>tone(f,0.18,'triangle',0.08,i*0.11)); },
+  door:()=>{ tone(80,1.1,'sawtooth',0.05,0,140); tone(55,0.9,'triangle',0.05,0.3); },
+  wire:()=>tone(1200,0.05,'sine',0.04),
+  unwire:()=>tone(500,0.07,'sine',0.04),
+  step:()=>tone(90,0.06,'triangle',0.02),
+};
+
+/* ================= ТЕКСТУРАЛАР ================= */
+function cv(w,h){ const c=document.createElement('canvas'); c.width=w; c.height=h; return c; }
+function ctex(c,rep){ const t=new THREE.CanvasTexture(c); t.encoding=THREE.sRGBEncoding; t.anisotropy=4; if(rep){ t.wrapS=t.wrapT=THREE.RepeatWrapping; t.repeat.set(rep[0],rep[1]); } return t; }
+function rr(g,x,y,w,h,r){ g.beginPath(); g.moveTo(x+r,y); g.arcTo(x+w,y,x+w,y+h,r); g.arcTo(x+w,y+h,x,y+h,r); g.arcTo(x,y+h,x,y,r); g.arcTo(x,y,x+w,y,r); g.closePath(); }
+
+function texFloor(){
+  const c=cv(512,512), g=c.getContext('2d'); g.fillStyle='#5a3d26'; g.fillRect(0,0,512,512);
+  const rows=8, ph=64;
+  for(let r=0;r<rows;r++){
+    let x=-(r%3)*70;
+    while(x<512){
+      const w=140+Math.random()*130, sh=0.82+Math.random()*0.32;
+      g.fillStyle=`rgb(${Math.round(146*sh)},${Math.round(104*sh)},${Math.round(66*sh)})`;
+      g.fillRect(x,r*ph,w-3,ph-3);
+      g.strokeStyle='rgba(50,28,12,0.22)'; g.lineWidth=1;
+      for(let k=0;k<7;k++){ const yy=r*ph+4+Math.random()*(ph-10); g.beginPath(); g.moveTo(x,yy); g.bezierCurveTo(x+w*.3,yy+Math.random()*6-3,x+w*.6,yy+Math.random()*6-3,x+w,yy+Math.random()*4-2); g.stroke(); }
+      x+=w;
+    }
+  }
+  return ctex(c,[3,3]);
+}
+function texWall(){
+  const c=cv(256,256), g=c.getContext('2d'); g.fillStyle='#cdc4b0'; g.fillRect(0,0,256,256);
+  for(let i=0;i<5000;i++){ g.fillStyle=`rgba(0,0,0,${Math.random()*0.07})`; g.fillRect(Math.random()*256,Math.random()*256,2,2); }
+  for(let i=0;i<2000;i++){ g.fillStyle=`rgba(255,255,255,${Math.random()*0.09})`; g.fillRect(Math.random()*256,Math.random()*256,2,2); }
+  return ctex(c,[4,2]);
+}
+function texConcrete(){
+  const c=cv(256,256), g=c.getContext('2d'); g.fillStyle='#6a6d70'; g.fillRect(0,0,256,256);
+  for(let i=0;i<6000;i++){ g.fillStyle=`rgba(0,0,0,${Math.random()*0.12})`; g.fillRect(Math.random()*256,Math.random()*256,2,2); }
+  return ctex(c,[2,2]);
+}
+function chalkLine(g,pts){ g.beginPath(); pts.forEach((p,i)=> i?g.lineTo(p[0],p[1]):g.moveTo(p[0],p[1])); g.stroke(); }
+function chalkRes(g,x,y,w,label){ g.strokeRect(x,y-11,w,22); g.font='500 18px '+FONT; g.fillText(label,x+w/2,y-16); }
+function texBoard(){
+  const c=cv(1024,512), g=c.getContext('2d'); g.fillStyle='#2b4a3d'; g.fillRect(0,0,1024,512);
+  for(let i=0;i<50;i++){ g.fillStyle=`rgba(255,255,255,${Math.random()*0.045})`; g.beginPath(); g.ellipse(Math.random()*1024,Math.random()*512,60+Math.random()*140,20+Math.random()*50,Math.random()*3,0,Math.PI*2); g.fill(); }
+  g.fillStyle='rgba(255,255,255,.93)'; g.textAlign='left'; g.textBaseline='alphabetic';
+  g.font='700 40px '+FONT; g.fillText('Ом заңы:   I = U / R', 48, 74);
+  g.font='500 29px '+FONT;
+  g.fillText('Тізбектей:  R = R₁ + R₂      I = I₁ = I₂      U = U₁ + U₂', 48, 150);
+  g.fillText('Параллель:  1/R = 1/R₁ + 1/R₂    U = U₁ = U₂    I = I₁ + I₂', 48, 218);
+  g.fillText('1 А = 1000 мА          U = I · R', 48, 286);
+  g.strokeStyle='rgba(255,255,255,.88)'; g.lineWidth=3; g.lineCap='round'; g.textAlign='center';
+  // тізбектей сызба
+  chalkLine(g,[[90,420],[90,360],[420,360],[420,420],[250,420]]); chalkLine(g,[[210,420],[90,420]]);
+  chalkRes(g,150,360,70,'R₁'); chalkRes(g,280,360,70,'R₂');
+  chalkLine(g,[[222,405],[222,435]]); g.lineWidth=6; chalkLine(g,[[238,412],[238,428]]); g.lineWidth=3;
+  g.font='500 20px '+FONT; g.fillText('тізбектей',255,470);
+  // параллель сызба
+  chalkLine(g,[[560,420],[560,340],[900,340],[900,420],[740,420]]); chalkLine(g,[[700,420],[560,420]]);
+  chalkLine(g,[[620,340],[620,380],[840,380],[840,340]]);
+  chalkRes(g,700,340,70,'R₁'); g.strokeRect(700,369,70,22); g.fillText('R₂',735,415);
+  chalkLine(g,[[712,405],[712,435]]); g.lineWidth=6; chalkLine(g,[[728,412],[728,428]]); g.lineWidth=3;
+  g.font='500 20px '+FONT; g.fillText('параллель',730,470);
+  g.font='italic 500 22px '+FONT; g.fillStyle='rgba(255,226,140,.95)'; g.textAlign='left';
+  g.fillText('Амперметр — тізбектей, вольтметр — параллель қосылады!', 48, 505);
+  return ctex(c);
+}
+function texWindow(){
+  const c=cv(256,384), g=c.getContext('2d');
+  const gr=g.createLinearGradient(0,0,0,384); gr.addColorStop(0,'#060c1f'); gr.addColorStop(1,'#16264a'); g.fillStyle=gr; g.fillRect(0,0,256,384);
+  for(let i=0;i<90;i++){ g.fillStyle=`rgba(255,255,255,${0.3+Math.random()*0.7})`; const s=Math.random()<.15?2:1; g.fillRect(Math.random()*256,Math.random()*260,s,s); }
+  const mg=g.createRadialGradient(178,84,10,178,84,70); mg.addColorStop(0,'rgba(240,238,210,.55)'); mg.addColorStop(1,'rgba(240,238,210,0)'); g.fillStyle=mg; g.fillRect(0,0,256,200);
+  g.fillStyle='#efe9c8'; g.beginPath(); g.arc(178,84,24,0,Math.PI*2); g.fill();
+  g.fillStyle='#0b1226'; g.beginPath(); g.arc(188,78,20,0,Math.PI*2); g.fill();
+  // ғимараттар
+  g.fillStyle='#070b18'; [[0,300,50,84],[55,270,40,114],[100,320,70,64],[175,290,45,94],[225,310,31,74]].forEach(b=>g.fillRect(...b));
+  g.fillStyle='rgba(255,220,140,.8)'; [[12,320],[30,340],[70,290],[80,330],[120,335],[190,310],[240,330]].forEach(p=>g.fillRect(p[0],p[1],5,7));
+  return ctex(c);
+}
+function texPoster(){
+  const c=cv(300,420), g=c.getContext('2d'); g.fillStyle='#efd35a'; g.fillRect(0,0,300,420);
+  g.fillStyle='#161616'; g.fillRect(0,0,300,60); g.fillRect(0,400,300,20);
+  g.fillStyle='#efd35a'; g.font='700 28px '+FONT; g.textAlign='center'; g.fillText('САҚ БОЛ!',150,42);
+  g.fillStyle='#161616'; g.beginPath(); g.moveTo(150,90); g.lineTo(250,250); g.lineTo(50,250); g.closePath(); g.fill();
+  g.fillStyle='#efd35a'; g.beginPath(); g.moveTo(158,125); g.lineTo(132,185); g.lineTo(152,185); g.lineTo(138,225); g.lineTo(172,165); g.lineTo(152,165); g.lineTo(166,125); g.closePath(); g.fill();
+  g.fillStyle='#161616'; g.font='700 24px '+FONT; g.fillText('ЭЛЕКТР ТОГЫ',150,295);
+  g.font='500 16px '+FONT; g.fillText('Тізбекті тек ток өшірулі',150,330); g.fillText('кезде құрастыр',150,352); g.fillText('Ылғал қолмен ұстама!',150,382);
+  return ctex(c);
+}
+function texExit(){
+  const c=cv(256,96), g=c.getContext('2d'); g.fillStyle='#0f7a41'; g.fillRect(0,0,256,96);
+  g.fillStyle='#fff'; g.font='700 52px '+FONT; g.textAlign='center'; g.fillText('ШЫҒУ →',128,66);
+  return ctex(c);
+}
+function texLocker(){
+  const c=cv(256,512), g=c.getContext('2d'); g.fillStyle='#5f6b74'; g.fillRect(0,0,256,512);
+  g.strokeStyle='rgba(0,0,0,.35)'; g.lineWidth=4; g.strokeRect(20,20,216,472); g.strokeRect(128,20,0,472);
+  g.fillStyle='#2b3138'; [[60,240],[180,240]].forEach(p=>g.fillRect(p[0]-4,p[1]-16,8,32));
+  for(let i=0;i<8;i++){ g.fillStyle='rgba(0,0,0,.4)'; g.fillRect(40,50+i*12,60,4); g.fillRect(156,50+i*12,60,4); }
+  return ctex(c);
+}
+
+/* ================= 3D САХНА ================= */
+const S={state:'intro',lightOn:false,unlocked:false,doorOpen:false,doorAngle:0,attempts:0,hints:0,t0:0,elapsed:0,
+  obj:{light:false,read:false,build:false,code:false,exit:false}};
+let scene,camera,renderer,ray;
+const INTER=[], COLS=[];
+let ambient,ceilLight,bulbMat,switchNub,doorG,ledMat,monTex,monC,deskBulbMats=[],shadeMat;
+const P={x:0.8,z:2.6,yaw:0,pitch:0,bob:0};
+const canvas=$('#gl');
+
+function mesh(geo,mat,x,y,z,parent){ const m=new THREE.Mesh(geo,mat); m.position.set(x,y,z); m.castShadow=true; m.receiveShadow=true; (parent||scene).add(m); return m; }
+function box(w,h,d,mat,x,y,z,parent){ return mesh(new THREE.BoxGeometry(w,h,d),mat,x,y,z,parent); }
+function col(x1,z1,x2,z2){ COLS.push({x1,z1,x2,z2}); }
+function inter(m,type){ m.userData.inter=type; INTER.push(m); return m; }
+
+function buildScene(){
+  scene=new THREE.Scene(); scene.background=new THREE.Color(0x04060a);
+  camera=new THREE.PerspectiveCamera(72,innerWidth/innerHeight,0.05,60); camera.rotation.order='YXZ';
+  renderer=new THREE.WebGLRenderer({canvas,antialias:true,powerPreference:'high-performance'});
+  renderer.setPixelRatio(Math.min(devicePixelRatio,IS_SMALL?1.2:1.5)); renderer.setSize(innerWidth,innerHeight);
+  renderer.shadowMap.enabled=true; renderer.shadowMap.type=THREE.PCFSoftShadowMap;
+  renderer.outputEncoding=THREE.sRGBEncoding; renderer.toneMapping=THREE.ACESFilmicToneMapping; renderer.toneMappingExposure=1.05;
+  ray=new THREE.Raycaster();
+
+  const M={
+    floor:new THREE.MeshStandardMaterial({map:texFloor(),roughness:.85}),
+    wall:new THREE.MeshStandardMaterial({map:texWall(),roughness:.95}),
+    ceil:new THREE.MeshStandardMaterial({color:0xe6e2d8,roughness:1}),
+    base:new THREE.MeshStandardMaterial({color:0x3a2a1c,roughness:.7}),
+    wood:new THREE.MeshStandardMaterial({color:0x5e4028,roughness:.6}),
+    woodL:new THREE.MeshStandardMaterial({color:0xa8804f,roughness:.6}),
+    metal:new THREE.MeshStandardMaterial({color:0x9aa0a8,metalness:.75,roughness:.35}),
+    dark:new THREE.MeshStandardMaterial({color:0x1b1e24,roughness:.5}),
+    plastic:new THREE.MeshStandardMaterial({color:0x2a2f3a,roughness:.45}),
+    door:new THREE.MeshStandardMaterial({color:0x7b5335,roughness:.55}),
+    white:new THREE.MeshStandardMaterial({color:0xf1eee6,roughness:.6}),
+    concrete:new THREE.MeshStandardMaterial({map:texConcrete(),roughness:1}),
+    chair:new THREE.MeshStandardMaterial({color:0x2c3f63,roughness:.7}),
+    glass:new THREE.MeshStandardMaterial({color:0xffffff,transparent:true,opacity:.35,roughness:.1}),
+  };
+
+  /* --- бөлме: 9 × 8 × 3.2 --- */
+  const floor=mesh(new THREE.PlaneGeometry(9,8),M.floor,0,0,0); floor.rotation.x=-Math.PI/2; floor.castShadow=false;
+  const ceil=mesh(new THREE.PlaneGeometry(9,8),M.ceil,0,3.2,0); ceil.rotation.x=Math.PI/2; ceil.castShadow=false;
+  box(9.4,3.2,0.2,M.wall,0,1.6,4.1);        // алдыңғы (z=+4)
+  box(0.2,3.2,8,M.wall,-4.6,1.6,0);         // сол (x=-4.5)
+  box(0.2,3.2,8,M.wall,4.6,1.6,0);          // оң (x=+4.5)
+  box(6.5,3.2,0.2,M.wall,-1.25,1.6,-4.1);   // артқы, есіктің сол жағы
+  box(1.5,3.2,0.2,M.wall,3.75,1.6,-4.1);    // артқы, есіктің оң жағы
+  box(1.0,1.1,0.2,M.wall,2.5,2.65,-4.1);    // есік үсті
+  // плинтус
+  [[9,0,-3.95],[9,0,3.95],[0,-4.5,0],[0,4.5,0]].forEach((p,i)=>{ const m=i<2?box(9,0.1,0.03,M.base,0,0.05,p[2]):box(0.03,0.1,8,M.base,p[1],0.05,0); m.castShadow=false; });
+
+  /* --- есік --- */
+  const fr=M.woodL;
+  box(0.08,2.14,0.16,fr,1.98,1.07,-4); box(0.08,2.14,0.16,fr,3.02,1.07,-4); box(1.12,0.08,0.16,fr,2.5,2.14,-4);
+  doorG=new THREE.Group(); doorG.position.set(2.0,0,-4); scene.add(doorG);
+  const door=inter(box(1.0,2.08,0.06,M.door,0.5,1.04,0,doorG),'door');
+  [[0.5,1.55],[0.5,0.5]].forEach(p=>{ const pnl=box(0.7,0.7,0.02,M.wood,p[0],p[1],0.035,doorG); pnl.castShadow=false; });
+  const hnd=mesh(new THREE.CylinderGeometry(0.015,0.015,0.14,10),M.metal,0.88,1.02,0.07,doorG); hnd.rotation.z=Math.PI/2;
+  mesh(new THREE.CylinderGeometry(0.025,0.025,0.05,10),M.metal,0.88,1.02,0.04,doorG).rotation.x=Math.PI/2;
+  // кодты құлып панелі
+  inter(box(0.13,0.18,0.03,M.dark,3.3,1.3,-3.985),'door');
+  ledMat=new THREE.MeshStandardMaterial({color:0xff2a2a,emissive:0xff2a2a,emissiveIntensity:1.4});
+  const led=mesh(new THREE.SphereGeometry(0.012,8,8),ledMat,3.3,1.37,-3.968); led.castShadow=false;
+  for(let i=0;i<9;i++){ const k=box(0.025,0.025,0.006,M.plastic,3.27+(i%3)*0.03,1.33-Math.floor(i/3)*0.03,-3.968); k.castShadow=false; }
+  // ШЫҒУ белгісі
+  const exitS=new THREE.Mesh(new THREE.PlaneGeometry(0.5,0.19),new THREE.MeshBasicMaterial({map:texExit()})); exitS.position.set(2.5,2.9,-3.985); scene.add(exitS);
+  const exitL=new THREE.PointLight(0x3dff8a,0.35,2.5); exitL.position.set(2.5,2.85,-3.8); scene.add(exitL);
+
+  /* --- дәліз --- */
+  const cf=mesh(new THREE.PlaneGeometry(1.5,4.2),M.concrete,2.65,0.001,-6.1); cf.rotation.x=-Math.PI/2;
+  const cc=mesh(new THREE.PlaneGeometry(1.5,4.2),M.concrete,2.65,2.6,-6.1); cc.rotation.x=Math.PI/2;
+  box(0.2,2.6,4.2,M.concrete,1.8,1.3,-6.1); box(0.2,2.6,4.2,M.concrete,3.5,1.3,-6.1); box(1.9,2.6,0.2,M.concrete,2.65,1.3,-8.3);
+  const exitS2=new THREE.Mesh(new THREE.PlaneGeometry(0.7,0.26),new THREE.MeshBasicMaterial({map:texExit()})); exitS2.position.set(2.65,2.1,-8.19); scene.add(exitS2);
+  const corL=new THREE.PointLight(0x9fffc7,0.7,5); corL.position.set(2.65,2.2,-7.6); scene.add(corL);
+
+  /* --- ажыратқыш --- */
+  const swPlate=inter(box(0.09,0.09,0.014,M.white,1.4,1.25,-3.993),'switch'); swPlate.castShadow=false;
+  switchNub=inter(box(0.04,0.05,0.02,M.white,1.4,1.235,-3.978),'switch'); switchNub.castShadow=false;
+
+  /* --- төбе шамы --- */
+  mesh(new THREE.CylinderGeometry(0.008,0.008,0.5,6),M.dark,0,2.95,0);
+  shadeMat=new THREE.MeshStandardMaterial({color:0x2e5a4d,roughness:.5,side:THREE.DoubleSide});
+  const shade=mesh(new THREE.CylinderGeometry(0.42,0.1,0.28,32,1,true),shadeMat,0,2.66,0); shade.castShadow=false;
+  bulbMat=new THREE.MeshStandardMaterial({color:0xfff6e0,emissive:0xffe6b0,emissiveIntensity:0,roughness:.3});
+  const bulb=mesh(new THREE.SphereGeometry(0.07,16,16),bulbMat,0,2.58,0); bulb.castShadow=false;
+  ceilLight=new THREE.PointLight(0xffe9c4,0,18,1); ceilLight.position.set(0,2.5,0); ceilLight.castShadow=true;
+  ceilLight.shadow.mapSize.set(IS_SMALL?512:1024,IS_SMALL?512:1024); ceilLight.shadow.bias=-0.004; ceilLight.shadow.camera.near=0.1; ceilLight.shadow.camera.far=20; scene.add(ceilLight);
+  ambient=new THREE.AmbientLight(0x2c3a5e,0.38); scene.add(ambient);
+
+  /* --- терезе (сол қабырға) --- */
+  box(0.06,1.34,1.64,M.white,-4.47,1.85,0.8); box(0.03,1.3,0.05,M.white,-4.44,1.85,0.8); box(0.03,0.05,1.6,M.white,-4.44,1.85,0.8);
+  const win=new THREE.Mesh(new THREE.PlaneGeometry(1.56,1.26),new THREE.MeshBasicMaterial({map:texWindow()})); win.position.set(-4.455,1.85,0.8); win.rotation.y=Math.PI/2; scene.add(win);
+  const moon=new THREE.PointLight(0x8fb3ff,0.55,7); moon.position.set(-3.9,2.0,0.8); scene.add(moon);
+  for(let i=0;i<8;i++) box(0.1,0.55,0.06,M.white,-4.4,0.42,0.3+i*0.14); box(0.06,0.06,1.2,M.white,-4.4,0.72,0.8);
+  col(-4.5,0.15,-4.3,1.45);
+
+  /* --- жұмыс үстелі --- */
+  const desk=inter(box(2.0,0.05,0.9,M.wood,-2.4,0.755,-3.45),'desk');
+  [[-3.35,-3.85],[-1.45,-3.85],[-3.35,-3.05],[-1.45,-3.05]].forEach(p=>box(0.06,0.73,0.06,M.dark,p[0],0.365,p[1]));
+  box(0.5,0.62,0.82,M.wood,-1.7,0.4,-3.45); for(let i=0;i<3;i++){ box(0.44,0.16,0.02,M.woodL,-1.7,0.2+i*0.2,-3.02); mesh(new THREE.CylinderGeometry(0.012,0.012,0.03,8),M.metal,-1.7,0.2+i*0.2,-3.0).rotation.x=Math.PI/2; }
+  col(-3.45,-3.95,-1.35,-2.98);
+  // монитор
+  const monG=new THREE.Group(); monG.position.set(-1.95,0.78,-3.6); monG.rotation.y=0.18; scene.add(monG);
+  box(0.26,0.02,0.18,M.dark,0,0.01,0,monG); box(0.05,0.28,0.04,M.dark,0,0.16,-0.02,monG);
+  const monFrame=box(0.64,0.42,0.03,M.dark,0,0.5,0,monG); inter(monFrame,'pc');
+  monC=cv(512,320); monTex=ctex(monC);
+  const scr=new THREE.Mesh(new THREE.PlaneGeometry(0.58,0.36),new THREE.MeshBasicMaterial({map:monTex})); scr.position.set(0,0.5,0.017); monG.add(scr); inter(scr,'pc');
+  const monL=new THREE.PointLight(0x7fd4ff,0.5,2.8); monL.position.set(-1.95,1.2,-3.2); scene.add(monL);
+  box(0.46,0.02,0.16,M.plastic,-1.95,0.79,-3.15); for(let i=0;i<4;i++) for(let j=0;j<11;j++){ const k=box(0.03,0.008,0.028,M.dark,-2.15+j*0.04,0.803,-3.2+i*0.035); k.castShadow=false; }
+  box(0.06,0.025,0.1,M.plastic,-1.6,0.79,-3.15);
+  // үстелдегі заттар (үстел тапсырмасына сілтеме)
+  [[-3.15,-3.65],[-2.85,-3.3]].forEach(p=>{
+    const gm=new THREE.MeshStandardMaterial({color:0xfff7dd,emissive:0xffd070,emissiveIntensity:0,transparent:true,opacity:.75,roughness:.1});
+    deskBulbMats.push(gm);
+    inter(mesh(new THREE.SphereGeometry(0.05,16,16),gm,p[0],0.86,p[1]),'desk');
+    inter(mesh(new THREE.CylinderGeometry(0.025,0.03,0.05,12),M.dark,p[0],0.805,p[1]),'desk');
+  });
+  const bat=inter(box(0.16,0.09,0.08,M.dark,-2.65,0.825,-3.72),'desk'); mesh(new THREE.CylinderGeometry(0.012,0.012,0.025,8),M.metal,-2.7,0.88,-3.72); mesh(new THREE.CylinderGeometry(0.012,0.012,0.025,8),new THREE.MeshStandardMaterial({color:0xd03a3a}),-2.6,0.88,-3.72);
+  inter(mesh(new THREE.CylinderGeometry(0.085,0.085,0.035,24),M.dark,-2.5,0.8,-3.22),'desk'); mesh(new THREE.CylinderGeometry(0.07,0.07,0.004,24),new THREE.MeshStandardMaterial({color:0xf3ecd6}),-2.5,0.82,-3.22);
+  inter(mesh(new THREE.TorusGeometry(0.09,0.02,10,24),new THREE.MeshStandardMaterial({color:0xc4302b,roughness:.5}),-3.25,0.8,-3.15),'desk').rotation.x=Math.PI/2;
+  // орындық
+  box(0.46,0.05,0.46,M.chair,-2.35,0.46,-2.55); box(0.46,0.5,0.05,M.chair,-2.35,0.76,-2.33);
+  [[-2.55,-2.75],[-2.15,-2.75],[-2.55,-2.35],[-2.15,-2.35]].forEach(p=>box(0.04,0.44,0.04,M.metal,p[0],0.22,p[1]));
+  col(-2.6,-2.8,-2.1,-2.3);
+  // қоқыс шелегі
+  mesh(new THREE.CylinderGeometry(0.15,0.13,0.36,16),M.plastic,-0.9,0.18,-3.65); col(-1.05,-3.8,-0.75,-3.5);
+
+  /* --- оң қабырға: тақта, сөре, шкаф --- */
+  box(0.05,1.34,2.54,M.woodL,4.47,1.75,-1.2);
+  const bd=new THREE.Mesh(new THREE.PlaneGeometry(2.46,1.26),new THREE.MeshStandardMaterial({map:texBoard(),roughness:1})); bd.position.set(4.44,1.75,-1.2); bd.rotation.y=-Math.PI/2; bd.receiveShadow=true; scene.add(bd);
+  box(0.02,0.04,0.5,M.white,4.44,1.1,-1.2);
+  [1.55,1.15].forEach(y=>box(0.26,0.04,1.5,M.woodL,4.36,y,1.6));
+  const bookCols=[0x9b2f2f,0x2f5f9b,0x3f8a4a,0xd9a441,0x6b3f8a,0xe0e0e0,0x8a4b2f];
+  let bz=0.95; for(let i=0;i<9;i++){ const h=0.22+Math.random()*0.12, w=0.05+Math.random()*0.04; box(0.2,h,w,new THREE.MeshStandardMaterial({color:bookCols[i%bookCols.length],roughness:.7}),4.36,1.57+h/2,bz+w/2); bz+=w+0.008; }
+  bz=1.0; for(let i=0;i<6;i++){ const h=0.2+Math.random()*0.14, w=0.06+Math.random()*0.05; box(0.2,h,w,new THREE.MeshStandardMaterial({color:bookCols[(i+3)%bookCols.length],roughness:.7}),4.36,1.17+h/2,bz+w/2); bz+=w+0.01; }
+  const lk=box(0.8,2.0,0.5,new THREE.MeshStandardMaterial({map:texLocker(),roughness:.5,metalness:.3}),4.05,1.0,3.3); col(3.6,3.0,4.5,3.6);
+
+  /* --- алдыңғы қабырға: плакат, сағат --- */
+  const ps=new THREE.Mesh(new THREE.PlaneGeometry(0.6,0.84),new THREE.MeshStandardMaterial({map:texPoster(),roughness:.9})); ps.position.set(-1.6,1.75,3.985); ps.rotation.y=Math.PI; ps.receiveShadow=true; scene.add(ps);
+  const ps2=new THREE.Mesh(new THREE.PlaneGeometry(0.6,0.84),new THREE.MeshStandardMaterial({map:texPoster(),roughness:.9})); ps2.position.set(1.4,1.75,3.985); ps2.rotation.y=Math.PI; ps2.rotation.z=0.04; scene.add(ps2);
+  mesh(new THREE.CylinderGeometry(0.18,0.18,0.03,24),M.dark,0,2.5,3.97).rotation.x=Math.PI/2;
+  mesh(new THREE.CylinderGeometry(0.16,0.16,0.01,24),M.white,0,2.5,3.955).rotation.x=Math.PI/2;
+  // корпус, парта қатары (толықтыру)
+  for(let i=0;i<2;i++){ box(1.2,0.04,0.5,M.woodL,-2.5+i*2.6,0.72,1.8); [[-0.55,-0.2],[0.55,-0.2],[-0.55,0.2],[0.55,0.2]].forEach(p=>box(0.04,0.7,0.04,M.metal,-2.5+i*2.6+p[0],0.36,1.8+p[1])); col(-2.5+i*2.6-0.6,1.55,-2.5+i*2.6+0.6,2.05); }
+
+  drawMonitor();
+}
+
+function drawMonitor(){
+  const g=monC.getContext('2d'); g.fillStyle='#07141c'; g.fillRect(0,0,512,320);
+  for(let y=0;y<320;y+=3){ g.fillStyle='rgba(0,0,0,.28)'; g.fillRect(0,y,512,1); }
+  g.textAlign='left'; g.fillStyle='#8fe3ff'; g.font='700 22px '+MONO; g.fillText('ЗЕРТХАНА ЖҮЙЕСІ v2.6',24,44);
+  g.fillStyle='#2e5768'; g.fillRect(24,58,464,2);
+  const ok=S.unlocked;
+  g.strokeStyle=ok?'#59f18f':'#ff5a5a'; g.lineWidth=5; g.beginPath(); g.arc(60,128,18,Math.PI,ok?Math.PI*1.75:0); g.stroke();
+  g.fillStyle=ok?'#59f18f':'#ff5a5a'; g.fillRect(34,128,52,42);
+  g.font='700 30px '+MONO; g.fillText(ok?'ЕСІК АШЫҚ':'ЕСІК ҚҰЛЫПТАЛҒАН',112,158);
+  g.fillStyle='#9fb7c4'; g.font='19px '+MONO;
+  g.fillText(ok?'Бөлмеден шығуға болады.':'Кодты енгізу үшін жақында,',24,228);
+  g.fillText(ok?'Сәтті жол!':'[E] пернесін бас.',24,256);
+  g.fillStyle='#8fe3ff'; g.fillText('>_',24,300);
+  monTex.needsUpdate=true;
+}
+
+/* --- жарық --- */
+function applyLight(k){
+  ceilLight.intensity=1.25*k; ambient.intensity=0.38+0.6*k;
+  ambient.color.setRGB(lerp(0.17,1.0,k),lerp(0.23,0.95,k),lerp(0.37,0.85,k));
+  bulbMat.emissiveIntensity=1.6*k; shadeMat.emissive=new THREE.Color(0x1a2a24); shadeMat.emissiveIntensity=0.6*k;
+}
+function setLight(on){
+  S.lightOn=on; switchNub.position.y=on?1.265:1.235;
+  if(on){ [[0,0.45],[70,0],[150,0.85],[210,0.25],[320,1]].forEach(([t,v])=>setTimeout(()=>{ if(S.lightOn) applyLight(v); },t)); }
+  else applyLight(0);
+}
+
+/* ================= ОЙЫНШЫ / БАСҚАРУ ================= */
+const keys={};
+let hover=null, lastStep=0;
+const ORIGIN2=new THREE.Vector2(0,0);
+
+function blocked(x,z){
+  const r=0.28;
+  if(z>-3.74){ if(x<-4.5+r||x>4.5-r||z>4-r) return true; }
+  else { if(!S.doorOpen) return true; if(x<2.3||x>2.7) return true; if(z<-7.7) return true; }
+  for(const c of COLS){ if(x>c.x1-r&&x<c.x2+r&&z>c.z1-r&&z<c.z2+r) return true; }
+  return false;
+}
+function tryMove(dx,dz){ if(!blocked(P.x+dx,P.z)) P.x+=dx; if(!blocked(P.x,P.z+dz)) P.z+=dz; }
+
+const JOY={x:0,z:0,id:null,run:false};
+const RJ={x:0,z:0,run:false,ts:0};   // телефоннан келетін джойстик
+function updatePlayer(dt){
+  const run=keys.ShiftLeft||keys.ShiftRight||JOY.run||RJ.run; const sp=(run?4.3:2.7)*dt;
+  const rOn=performance.now()-RJ.ts<1500; let fx=JOY.x+(rOn?RJ.x:0), fz=JOY.z+(rOn?RJ.z:0);
+  if(keys.KeyW||keys.ArrowUp) fz+=1; if(keys.KeyS||keys.ArrowDown) fz-=1;
+  if(keys.KeyA||keys.ArrowLeft) fx-=1; if(keys.KeyD||keys.ArrowRight) fx+=1;
+  let moving=false;
+  const L=Math.hypot(fx,fz);
+  if(L>0.08){ const k=Math.min(1,L); fx/=L; fz/=L; const sy=Math.sin(P.yaw), cy=Math.cos(P.yaw);
+    tryMove((-sy*fz+cy*fx)*sp*k,(-cy*fz-sy*fx)*sp*k); P.bob+=dt*(run?13:9)*k; moving=true;
+    if(P.bob-lastStep>Math.PI){ lastStep=P.bob; SFX.step(); } }
+  camera.position.set(P.x,1.62+(moving?Math.sin(P.bob)*0.03:0),P.z);
+  camera.rotation.y=P.yaw; camera.rotation.x=P.pitch;
+}
+
+/* --- басқару режимі: пернетақта+тінтуір (pointer lock) немесе экрандық (сенсор / тек тінтуір) --- */
+S.touchUI=IS_TOUCH;
+function setTouchUI(on){
+  S.touchUI=on; $('#touch').classList.toggle('hidden',!on); $('#ctlBtn').classList.toggle('on',on);
+  $('#controls-hint').style.display=on?'none':'';
+  if(on){ if(isLocked()) document.exitPointerLock(); $('#paused').classList.add('hidden'); }
+}
+function lockPointer(){ if(S.touchUI) return; try{ const p=canvas.requestPointerLock(); if(p&&p.catch) p.catch(()=>{}); }catch(e){} }
+function isLocked(){ return document.pointerLockElement===canvas; }
+
+/* тінтуір pointer-lock режимі */
+document.addEventListener('mousemove',e=>{
+  if(S.state!=='play'||!isLocked()) return;
+  P.yaw-=e.movementX*0.0022; P.pitch=clamp(P.pitch-e.movementY*0.0022,-1.45,1.45);
+});
+document.addEventListener('pointerlockchange',()=>{
+  if(S.state==='play'&&!S.touchUI) $('#paused').classList.toggle('hidden',isLocked());
+});
+$('#paused').addEventListener('click',()=>lockPointer());
+
+/* сүйреп қарау + түртіп әрекет (сенсор және тінтуір) */
+const look={id:null,x:0,y:0,sx:0,sy:0,t:0,moved:false};
+canvas.addEventListener('pointerdown',e=>{
+  if(S.state!=='play') return;
+  if(isLocked()){ interact(); return; }
+  if(e.pointerType==='mouse'&&!S.touchUI&&e.button===0){ lockPointer(); }
+  if(look.id!==null) return;
+  look.id=e.pointerId; look.x=look.sx=e.clientX; look.y=look.sy=e.clientY; look.t=performance.now(); look.moved=false;
+  try{ canvas.setPointerCapture(e.pointerId); }catch(err){}
+});
+canvas.addEventListener('pointermove',e=>{
+  if(e.pointerId!==look.id||S.state!=='play') return;
+  const k=e.pointerType==='mouse'?0.0035:0.0045;
+  P.yaw-=(e.clientX-look.x)*k; P.pitch=clamp(P.pitch-(e.clientY-look.y)*k,-1.45,1.45);
+  look.x=e.clientX; look.y=e.clientY;
+  if(Math.hypot(e.clientX-look.sx,e.clientY-look.sy)>12) look.moved=true;
+});
+function lookEnd(e){
+  if(e.pointerId!==look.id) return;
+  const tap=!look.moved&&performance.now()-look.t<450; look.id=null;
+  if(tap&&S.state==='play'&&!isLocked()) tapAt(e.clientX,e.clientY);
+}
+canvas.addEventListener('pointerup',lookEnd); canvas.addEventListener('pointercancel',lookEnd);
+/* түртілген нүктеден сәуле жіберу: жақын затқа тікелей түртуге болады */
+function tapAt(cx,cy){
+  const v=new THREE.Vector2((cx/innerWidth)*2-1,-(cy/innerHeight)*2+1);
+  ray.setFromCamera(v,camera);
+  const hits=ray.intersectObjects(INTER,false);
+  if(hits.length&&hits[0].distance<3.2){ hover=hits[0].object.userData.inter; interact(); }
+  else if(hover) interact();
+}
+
+/* экрандық джойстик */
+(function(){
+  const joy=$('#joy'), knob=$('#joyKnob'); const R=42;
+  const upd=e=>{ const r=joy.getBoundingClientRect(); let dx=e.clientX-(r.left+r.width/2), dy=e.clientY-(r.top+r.height/2); const L=Math.hypot(dx,dy); if(L>R){ dx*=R/L; dy*=R/L; }
+    knob.style.transform=`translate(${dx}px,${dy}px)`; JOY.x=dx/R; JOY.z=-dy/R; };
+  joy.addEventListener('pointerdown',e=>{ e.preventDefault(); JOY.id=e.pointerId; try{ joy.setPointerCapture(e.pointerId); }catch(err){} upd(e); });
+  joy.addEventListener('pointermove',e=>{ if(e.pointerId===JOY.id) upd(e); });
+  const end=e=>{ if(e.pointerId!==JOY.id) return; JOY.id=null; JOY.x=JOY.z=0; knob.style.transform=''; };
+  joy.addEventListener('pointerup',end); joy.addEventListener('pointercancel',end); joy.addEventListener('lostpointercapture',end);
+  const act=$('#actBtn');
+  act.addEventListener('pointerdown',e=>{ e.preventDefault(); if(S.state==='play') interact(); });
+  const run=$('#runBtn');
+  run.addEventListener('pointerdown',e=>{ e.preventDefault(); JOY.run=!JOY.run; run.classList.toggle('on',JOY.run); });
+  $('#ctlBtn').addEventListener('click',()=>{ setTouchUI(!S.touchUI); if(!S.touchUI&&S.state==='play') lockPointer(); });
+  $('#fsBtn').addEventListener('click',()=>{ const d=document; if(d.fullscreenElement){ d.exitFullscreen(); } else { const p=d.documentElement.requestFullscreen&&d.documentElement.requestFullscreen(); if(p&&p.catch) p.catch(()=>{}); } });
+})();
+window.addEventListener('keydown',e=>{
+  if(e.target.tagName==='INPUT'){ if(e.code==='Escape') closeOverlay(); if(e.code==='Enter') submitCode(); return; }
+  keys[e.code]=true;
+  if(S.state==='play'){ if(e.code==='KeyE'||e.code==='Enter') interact(); if(['Space','ArrowUp','ArrowDown'].includes(e.code)) e.preventDefault(); }
+  else if(S.state==='bench'||S.state==='pc'){ if(e.code==='Escape') closeOverlay(); }
+});
+window.addEventListener('keyup',e=>keys[e.code]=false);
+window.addEventListener('blur',()=>{ for(const k in keys) keys[k]=false; });
+window.addEventListener('resize',()=>{ camera.aspect=innerWidth/innerHeight; camera.updateProjectionMatrix(); renderer.setSize(innerWidth,innerHeight); });
+
+/* --- HUD --- */
+let toastT=0;
+function toast(msg,ms){ const t=$('#toast'); t.innerHTML=msg; t.classList.add('show'); clearTimeout(toastT); toastT=setTimeout(()=>t.classList.remove('show'),ms||2600); }
+function setObj(k){ if(S.obj[k]) return; S.obj[k]=true; updateObjectives(); }
+function updateObjectives(){
+  let nowSet=false;
+  document.querySelectorAll('#objectives li').forEach(li=>{ const k=li.dataset.o; li.classList.toggle('done',S.obj[k]); const now=!S.obj[k]&&!nowSet; li.classList.toggle('now',now); if(now) nowSet=true; });
+}
+function promptFor(type){
+  switch(type){
+    case 'switch': return S.lightOn?'<b>E</b>Жарықты өшіру':'<b>E</b>Жарықты жағу';
+    case 'desk': return '<b>E</b>Жұмыс үстелі — тізбек құрастыру';
+    case 'pc': return '<b>E</b>Компьютер — кодты енгізу';
+    case 'door': return S.unlocked?(S.doorOpen?'<b>E</b>Шығу':'<b>E</b>Есікті ашу'):'<b>E</b>Есік — құлыпталған';
+  }
+  return '';
+}
+function updateHover(){
+  ray.setFromCamera(ORIGIN2,camera);
+  const hits=ray.intersectObjects(INTER,false);
+  const h=(hits.length&&hits[0].distance<2.7)?hits[0].object.userData.inter:null;
+  if(h!==hover){ hover=h; $('#cross').classList.toggle('hot',!!h); $('#actBtn').classList.toggle('hot',!!h); const p=$('#prompt'); if(h){ p.innerHTML=promptFor(h); p.classList.add('show'); } else p.classList.remove('show'); }
+  else if(h){ $('#prompt').innerHTML=promptFor(h); }
+}
+function interact(){
+  if(!hover) return;
+  switch(hover){
+    case 'switch': SFX.click(); setLight(!S.lightOn); if(S.lightOn){ setObj('light'); toast('Жарық жанды. Енді компьютердегі тапсырманы оқы.'); } break;
+    case 'desk': if(!S.lightOn){ toast('Тым қараңғы, ештеңе көрінбейді. Алдымен қабырғадағы ажыратқышпен жарықты жақ.',3200); SFX.error(); } else openBench(); break;
+    case 'pc': openPC(); break;
+    case 'door':
+      if(S.unlocked){ if(!S.doorOpen){ S.doorOpen=true; SFX.door(); } }
+      else { SFX.error(); toast('Есік құлыпталған. Код керек — компьютердегі тапсырманы шеш.',3000); }
+      break;
+  }
+}
+
+/* --- overlay-лар --- */
+function openBench(){ S.state='bench'; document.exitPointerLock&&document.exitPointerLock(); $('#paused').classList.add('hidden'); $('#bench').classList.remove('hidden'); benchStart(); }
+function openPC(){ S.state='pc'; document.exitPointerLock&&document.exitPointerLock(); $('#paused').classList.add('hidden'); $('#pc').classList.remove('hidden'); setObj('read'); renderPC(); setTimeout(()=>$('#codeInput').focus(),120); }
+function closeOverlay(){
+  if(IS_CTRL){ NET.send({t:'close'}); return; }
+  if(S.state==='bench') benchStop();
+  $('#bench').classList.add('hidden'); $('#pc').classList.add('hidden');
+  S.state='play'; lockPointer();
+}
+$('#benchClose').onclick=closeOverlay; $('#pcClose').onclick=closeOverlay;
+
+/* --- компьютер --- */
+function renderPC(){
+  const t=TASK;
+  $('#pcText').innerHTML=
+`<span class="dim">ЗЕРТХАНА ЖҮЙЕСІ v2.6 ─────────────── ${new Date().toLocaleTimeString('kk-KZ',{hour:'2-digit',minute:'2-digit'})}</span>
+${S.unlocked?'<span class="ok">ЕСІК: АШЫҚ ✔</span>':'<span class="red">ЕСІК: ҚҰЛЫПТАЛҒАН</span>  — кодты енгізіңіз'}
+
+<span class="hl">ТАПСЫРМА №${t.type==='series_I'?'1':t.type==='series_U2'?'2':t.type==='parallel_I'?'3':'4'}</span>
+  Батарея кернеуі:   U  = <span class="hl">${t.E} В</span>
+  1-шам кедергісі:   R₁ = <span class="hl">${t.R1} Ом</span>
+  2-шам кедергісі:   R₂ = <span class="hl">${t.R2} Ом</span>
+
+  ${t.ask}
+
+<span class="dim">Жауапты ${t.unit} бірлігінде санмен енгіз (мысалы: ${t.unit==='В'?'4,5':'1500'}).</span>`;
+  $('#pcHint').innerHTML='💡 '+t.hint;
+}
+function pcMsg(m,cls){ const e=$('#pcMsg'); e.textContent=m; e.className=cls||''; }
+function submitCode(){ const v=$('#codeInput').value.trim(); if(!v) return; if(IS_CTRL){ NET.send({t:'code',v}); pcMsg('… жіберілді, тексерілуде',''); return; } submitCodeValue(v); }
+function submitCodeValue(v){
+  if(S.unlocked) return;
+  S.attempts++;
+  if(checkCode(v)){ SFX.ok(); pcMsg('✔ КОД ДҰРЫС. ҚҰЛЫП АШЫЛДЫ.','ok'); unlock(); renderPC(); NET.send({t:'pcmsg',m:'✔ КОД ДҰРЫС. ҚҰЛЫП АШЫЛДЫ.',cls:'ok'});
+    setTimeout(()=>{ if(S.state==='pc'){ closeOverlay(); toast('Есік ашылды! Есіктен шығып, бөлмеден кет.',4500); } },1700); }
+  else { SFX.error(); pcMsg(`✖ ҚАТЕ КОД (${S.attempts}-әрекет). Тізбекті қайта тексер.`,'err'); NET.send({t:'pcmsg',m:`✖ ҚАТЕ КОД (${S.attempts}-әрекет). Тізбекті қайта тексер.`,cls:'err'});
+    const c=$('.crt'); c.classList.remove('shake'); void c.offsetWidth; c.classList.add('shake');
+    if(S.attempts>=2) $('#hintBtn').classList.add('pulse'); $('#codeInput').select(); }
+}
+$('#codeBtn').onclick=submitCode;
+$('#hintBtn').onclick=()=>{ const h=$('#pcHint'); if(h.style.display!=='block'){ h.style.display='block'; S.hints++; SFX.click(); } $('#hintBtn').classList.remove('pulse'); };
+function unlock(){
+  S.unlocked=true; setObj('code'); ledMat.color.setHex(0x3dff8a); ledMat.emissive.setHex(0x3dff8a); drawMonitor();
+  setTimeout(()=>{ S.doorOpen=true; SFX.door(); },1200);
+}
+
+/* --- жеңіс --- */
+function win(){
+  S.state='win'; document.exitPointerLock&&document.exitPointerLock(); setObj('exit'); SFX.ok();
+  const sec=Math.floor(S.elapsed); $('#winTime').textContent=pad(Math.floor(sec/60))+':'+pad(sec%60);
+  $('#winTries').textContent=S.attempts; $('#winHints').textContent=S.hints;
+  const stars=S.attempts<=1&&S.hints===0?5:(S.attempts<=2?4:3);
+  $('#winStars').textContent='★'.repeat(stars)+'☆'.repeat(5-stars)+'  Бағаң: '+stars;
+  $('#winExpl').textContent=TASK.expl;
+  $('#hud').classList.add('hidden'); $('#win').classList.remove('hidden');
+  NET.send({t:'win',time:$('#winTime').textContent,tries:S.attempts,hints:S.hints,stars:$('#winStars').textContent,expl:TASK.expl});
+}
+$('#againBtn').onclick=()=>location.reload();
+
+/* --- негізгі цикл --- */
+let prevT=0;
+function loop(t){
+  if(document.hidden) setTimeout(()=>loop(performance.now()),50); else requestAnimationFrame(loop);
+  const dt=Math.min(0.05,(t-prevT)/1000||0); prevT=t;
+  if(S.state==='play'){ updatePlayer(dt); updateHover(); if(S.doorOpen&&P.z<-4.7) win(); }
+  if(S.state!=='intro'&&S.state!=='win'){ S.elapsed=(performance.now()-S.t0)/1000; const s=Math.floor(S.elapsed); $('#timer').textContent=pad(Math.floor(s/60))+':'+pad(s%60); }
+  if(S.doorOpen){ S.doorAngle=lerp(S.doorAngle,1.7,dt*2.2); doorG.rotation.y=S.doorAngle; }
+  document.body.classList.toggle('playing',S.state==='play');
+  NET.tick();
+  if(!document.hidden) renderer.render(scene,camera);
+}
+
+function startGame(){
+  ac(); S.state='play'; S.t0=performance.now();
+  $('#intro').classList.add('hidden'); $('#hud').classList.remove('hidden'); updateObjectives(); setTouchUI(S.touchUI); lockPointer();
+  if(IS_TOUCH&&IS_SMALL){ try{ const p=document.documentElement.requestFullscreen&&document.documentElement.requestFullscreen(); if(p&&p.catch) p.catch(()=>{}); }catch(e){}
+    try{ screen.orientation&&screen.orientation.lock&&screen.orientation.lock('landscape').catch(()=>{}); }catch(e){} }
+  setTimeout(()=>{ $('#controls-hint').style.opacity=0; },14000);
+  toast('Қараңғы... Есіктің қасындағы қабырғадан ажыратқышты тап.',4000);
+}
+$('#startBtn').onclick=startGame;
+
+/* ================= ЖҰМЫС ҮСТЕЛІ: ТІЗБЕК ТАҚТАСЫ ================= */
+const B={W:1100,H:620,comps:[],wires:[],drag:null,from:null,mx:-99,my:-99,res:null,raf:0,cv:null,g:null,open:false};
+const WCOL=['#d3312c','#1f5fd0','#232323','#e0a21b','#2a9d4a','#8e44ad'];
+
+function benchInit(){
+  B.cv=$('#benchCanvas'); B.g=B.cv.getContext('2d');
+  B.comps=[
+    {id:'bat',kind:'battery',x:190,y:490,label:'Аккумулятор',E:TASK.E,terms:[{dx:-60,dy:-60,n:'−'},{dx:60,dy:-60,n:'+'}]},
+    {id:'l1',kind:'lamp',x:440,y:180,R:TASK.R1,label:'1-шам',terms:[{dx:-28,dy:80},{dx:28,dy:80}],glow:0},
+    {id:'l2',kind:'lamp',x:700,y:180,R:TASK.R2,label:'2-шам',terms:[{dx:-28,dy:80},{dx:28,dy:80}],glow:0},
+    {id:'am',kind:'ammeter',x:520,y:470,label:'Амперметр',terms:[{dx:-44,dy:78},{dx:44,dy:78}],needle:0},
+    {id:'vm',kind:'voltmeter',x:920,y:400,label:'Вольтметр',terms:[{dx:-44,dy:78},{dx:44,dy:78}],needle:0},
+  ];
+  $('#benchTask').textContent=TASK.ask;
+  $('#benchVals').innerHTML=`U = ${TASK.E} В &nbsp;·&nbsp; R₁ = ${TASK.R1} Ом &nbsp;·&nbsp; R₂ = ${TASK.R2} Ом`;
+  const pos=e=>{ const r=B.cv.getBoundingClientRect(); return {x:(e.clientX-r.left)*B.W/r.width,y:(e.clientY-r.top)*B.H/r.height}; };
+  B.cv.addEventListener('pointerdown',e=>{
+    e.preventDefault(); try{ B.cv.setPointerCapture(e.pointerId); }catch(err){} const p=pos(e); B.mx=p.x; B.my=p.y;
+    const t=hitTerm(p.x,p.y); if(t){ B.from=t; return; }
+    const wi=hitWire(p.x,p.y); if(wi>=0){ B.wires.splice(wi,1); SFX.unwire(); solve(); if(IS_CTRL) NET.send({t:'b',op:'del',i:wi}); return; }
+    const c=hitComp(p.x,p.y); if(c){ B.drag={c,ox:c.x-p.x,oy:c.y-p.y}; B.comps.splice(B.comps.indexOf(c),1); B.comps.push(c); }
+  });
+  B.cv.addEventListener('pointermove',e=>{ const p=pos(e); B.mx=p.x; B.my=p.y;
+    if(B.drag){ B.drag.c.x=clamp(p.x+B.drag.ox,70,B.W-70); B.drag.c.y=clamp(p.y+B.drag.oy,70,B.H-90); } });
+  const up=e=>{ if(B.from){ const p=pos(e); const t=hitTerm(p.x,p.y); if(t&&!(t.c===B.from.c&&t.t===B.from.t)) addWire(B.from,t); }
+    if(B.drag&&IS_CTRL) NET.send({t:'b',op:'move',id:B.drag.c.id,x:B.drag.c.x,y:B.drag.c.y}); B.from=null; B.drag=null; };
+  B.cv.addEventListener('pointerup',up); B.cv.addEventListener('pointercancel',()=>{B.from=null;B.drag=null;});
+  $('#benchClear').onclick=()=>{ B.wires=[]; SFX.unwire(); solve(); if(IS_CTRL) NET.send({t:'b',op:'clear'}); };
+}
+const tp=(c,i)=>({x:c.x+c.terms[i].dx,y:c.y+c.terms[i].dy});
+function hitTerm(x,y){ for(let k=B.comps.length-1;k>=0;k--){ const c=B.comps[k]; for(let i=0;i<c.terms.length;i++){ const p=tp(c,i); if(Math.hypot(x-p.x,y-p.y)<(S.touchUI?30:20)) return {c,t:i}; } } return null; }
+function bodyRect(c){ if(c.kind==='battery') return {x:c.x-88,y:c.y-48,w:176,h:96}; if(c.kind==='lamp') return {x:c.x-50,y:c.y-60,w:100,h:130}; return {x:c.x-66,y:c.y-66,w:132,h:132}; }
+function hitComp(x,y){ for(let i=B.comps.length-1;i>=0;i--){ const r=bodyRect(B.comps[i]); if(x>=r.x&&x<=r.x+r.w&&y>=r.y&&y<=r.y+r.h) return B.comps[i]; } return null; }
+function wireQ(w){ const a=tp(w.a.c,w.a.t), b=tp(w.b.c,w.b.t); const dx=b.x-a.x, dy=b.y-a.y, L=Math.hypot(dx,dy)||1; const s=Math.min(70,L*0.2)*w.sag; return {a,b,c:{x:(a.x+b.x)/2-dy/L*s,y:(a.y+b.y)/2+dx/L*s}}; }
+function qpt(q,t){ const u=1-t; return {x:u*u*q.a.x+2*u*t*q.c.x+t*t*q.b.x,y:u*u*q.a.y+2*u*t*q.c.y+t*t*q.b.y}; }
+function hitWire(x,y){ for(let i=B.wires.length-1;i>=0;i--){ const q=wireQ(B.wires[i]); for(let t=0.04;t<=0.96;t+=0.03){ const p=qpt(q,t); if(Math.hypot(x-p.x,y-p.y)<(S.touchUI?14:9)) return i; } } return -1; }
+function addWire(a,b){
+  const same=w=>(w.a.c===a.c&&w.a.t===a.t&&w.b.c===b.c&&w.b.t===b.t)||(w.a.c===b.c&&w.a.t===b.t&&w.b.c===a.c&&w.b.t===a.t);
+  if(B.wires.some(same)) return;
+  B.wires.push({a,b,sag:B.wires.length%2?-1:1,col:WCOL[B.wires.length%WCOL.length]}); SFX.wire(); solve();
+  if(IS_CTRL) NET.send({t:'b',op:'add',a:[a.c.id,a.t],b:[b.c.id,b.t]});
+}
+
+/* --- МОДИФИКАЦИЯЛАНҒАН ТҮЙІНДІК ТАЛДАУ (MNA) --- */
+function gauss(A,N){
+  for(let i=0;i<N;i++){ let p=i; for(let r=i+1;r<N;r++) if(Math.abs(A[r][i])>Math.abs(A[p][i])) p=r;
+    if(Math.abs(A[p][i])<1e-14) return null; if(p!==i){ const t=A[p]; A[p]=A[i]; A[i]=t; }
+    for(let r=i+1;r<N;r++){ const f=A[r][i]/A[i][i]; if(!f) continue; for(let c=i;c<=N;c++) A[r][c]-=f*A[i][c]; } }
+  const x=new Float64Array(N); for(let i=N-1;i>=0;i--){ let s=A[i][N]; for(let c=i+1;c<N;c++) s-=A[i][c]*x[c]; x[i]=s/A[i][i]; } return x;
+}
+function solve(){
+  const key=(c,t)=>c.id+':'+t, par={};
+  B.comps.forEach(c=>c.terms.forEach((_,i)=>par[key(c,i)]=key(c,i)));
+  const find=k=>{ while(par[k]!==k){ par[k]=par[par[k]]; k=par[k]; } return k; };
+  B.wires.forEach(w=>{ const a=find(key(w.a.c,w.a.t)), b=find(key(w.b.c,w.b.t)); if(a!==b) par[a]=b; });
+  const bat=B.comps.find(c=>c.kind==='battery'), ground=find(key(bat,0));
+  const idx={}; let n=0;
+  const nodeOf=k=>{ const r=find(k); if(r===ground) return -1; if(!(r in idx)) idx[r]=n++; return idx[r]; };
+  const res=[], src=[];
+  B.comps.forEach(c=>{
+    const a=nodeOf(key(c,0)), b=nodeOf(key(c,1));
+    if(c.kind==='lamp') res.push({a,b,R:c.R,c});
+    else if(c.kind==='voltmeter') res.push({a,b,R:1e7,c});
+    else if(c.kind==='ammeter'){ if(a!==b) src.push({a,b,V:0,c}); else c._short=true; }
+    else if(c.kind==='battery'){ const ni=n++; res.push({a,b:ni,R:0.001}); src.push({a:ni,b,V:c.E,c}); }
+  });
+  const m=src.length, N=n+m, A=Array.from({length:N},()=>new Float64Array(N+1));
+  const st=(i,j,v)=>{ if(i<0||j<0) return; A[i][j]+=v; };
+  res.forEach(r=>{ const g=1/r.R; st(r.a,r.a,g); st(r.b,r.b,g); st(r.a,r.b,-g); st(r.b,r.a,-g); });
+  for(let i=0;i<n;i++) A[i][i]+=1e-9;
+  src.forEach((s,k)=>{ const row=n+k; if(s.a>=0){ A[s.a][row]-=1; A[row][s.a]-=1; } if(s.b>=0){ A[s.b][row]+=1; A[row][s.b]+=1; } A[row][N]=s.V; });
+  const x=gauss(A,N);
+  const V=i=>i<0?0:x[i];
+  const out={lamps:{},am:0,vm:0,bat:0,short:false};
+  if(x){
+    res.forEach(r=>{ if(!r.c) return; const I=(V(r.a)-V(r.b))/r.R; if(r.c.kind==='lamp'){ const P=I*I*r.R, Pn=TASK.E*TASK.E/(4*r.R); out.lamps[r.c.id]={I:Math.abs(I),P,glow:clamp(Math.sqrt(P/Pn),0,1)}; } else out.vm=Math.abs(V(r.a)-V(r.b)); });
+    src.forEach((s,k)=>{ const I=Math.abs(x[n+k]); if(s.c.kind==='ammeter') out.am=I; else out.bat=I; });
+    if(out.bat>40) out.short=true;
+  }
+  if(out.short){ out.am=0; out.vm=0; for(const k in out.lamps) out.lamps[k].glow=0; }
+  B.res=out;
+  if(!out.short && Object.values(out.lamps).some(l=>l.glow>0.08)) setObj('build');
+  deskBulbMats.forEach((mt,i)=>{ const l=out.lamps[i?'l2':'l1']; mt.emissiveIntensity=l?l.glow*1.5:0; });
+  if(!IS_CTRL) NET.send({t:'bsync',...benchState()});
+}
+function benchState(){ return {comps:B.comps.map(c=>({id:c.id,x:c.x,y:c.y})), wires:B.wires.map(w=>({a:[w.a.c.id,w.a.t],b:[w.b.c.id,w.b.t],sag:w.sag,col:w.col}))}; }
+function applyBenchState(st){ const byId=id=>B.comps.find(c=>c.id===id);
+  (st.comps||[]).forEach(p=>{ const c=byId(p.id); if(c&&!(B.drag&&B.drag.c===c)){ c.x=p.x; c.y=p.y; } });
+  B.wires=(st.wires||[]).map(w=>({a:{c:byId(w.a[0]),t:w.a[1]},b:{c:byId(w.b[0]),t:w.b[1]},sag:w.sag,col:w.col})).filter(w=>w.a.c&&w.b.c);
+  solve(); }
+function applyBenchOp(m){ const byId=id=>B.comps.find(c=>c.id===id);
+  if(m.op==='add'){ const a=byId(m.a[0]), b=byId(m.b[0]); if(a&&b) addWire({c:a,t:m.a[1]},{c:b,t:m.b[1]}); }
+  else if(m.op==='del'){ if(m.i>=0&&m.i<B.wires.length){ B.wires.splice(m.i,1); SFX.unwire(); solve(); } }
+  else if(m.op==='clear'){ B.wires=[]; solve(); }
+  else if(m.op==='move'){ const c=byId(m.id); if(c){ c.x=clamp(m.x,70,B.W-70); c.y=clamp(m.y,70,B.H-90); } } }
+function setTask(t){ TASK=t; B.comps.forEach(c=>{ if(c.id==='bat') c.E=t.E; if(c.id==='l1') c.R=t.R1; if(c.id==='l2') c.R=t.R2; }); $('#benchTask').textContent=t.ask; $('#benchVals').innerHTML=`U = ${t.E} В &nbsp;·&nbsp; R₁ = ${t.R1} Ом &nbsp;·&nbsp; R₂ = ${t.R2} Ом`; }
+const fmtA=I=>(I>=10?I.toFixed(1):I.toFixed(3).replace(/(\.\d\d)0$/,'$1')).replace('.',',');
+const fmtV=U=>U.toFixed(2).replace('.',',');
+
+/* --- сурет салу --- */
+function drawBench(){
+  const g=B.g, W=B.W, H=B.H, r=B.res; g.setTransform(1,0,0,1,0,0); g.clearRect(0,0,W,H);
+  g.fillStyle='#1f3d38'; g.fillRect(0,0,W,H);
+  g.strokeStyle='rgba(255,255,255,.05)'; g.lineWidth=1;
+  for(let x=0;x<W;x+=25){ g.beginPath(); g.moveTo(x,0); g.lineTo(x,H); g.stroke(); }
+  for(let y=0;y<H;y+=25){ g.beginPath(); g.moveTo(0,y); g.lineTo(W,y); g.stroke(); }
+  g.strokeStyle='rgba(255,255,255,.18)'; g.lineWidth=2; g.strokeRect(12,12,W-24,H-24);
+  [[24,24],[W-24,24],[24,H-24],[W-24,H-24]].forEach(p=>{ g.fillStyle='#8a8f96'; g.beginPath(); g.arc(p[0],p[1],5,0,7); g.fill(); g.strokeStyle='#3a3d42'; g.lineWidth=1.5; g.beginPath(); g.moveTo(p[0]-3,p[1]-3); g.lineTo(p[0]+3,p[1]+3); g.stroke(); });
+  g.fillStyle='rgba(255,255,255,.35)'; g.font='500 12px '+FONT; g.textAlign='left'; g.fillText('ФИЗИКА КАБИНЕТІ · ЗЕРТХАНАЛЫҚ ҮСТЕЛ №4 · антистатикалық төсеніш',36,H-30);
+  // жабысқақ жазба
+  g.save(); g.translate(1000,86); g.rotate(-0.06); g.shadowColor='rgba(0,0,0,.4)'; g.shadowBlur=10; g.shadowOffsetY=5;
+  g.fillStyle='#f7e07a'; g.fillRect(-85,-60,170,120); g.shadowColor='transparent';
+  g.fillStyle='#4a3a10'; g.font='700 15px '+FONT; g.textAlign='center'; g.fillText('Схема:',0,-32); g.font='700 20px '+FONT; g.fillText(TASK.mode,0,-8);
+  g.font='500 14px '+FONT; g.fillText(`U = ${TASK.E} В`,0,18); g.fillText(`R₁ = ${TASK.R1} Ом,  R₂ = ${TASK.R2} Ом`,0,38); g.restore();
+
+  B.comps.forEach(c=>{ if(c.kind==='battery') drawBattery(c); else if(c.kind==='lamp') drawLamp(c); else drawMeter(c); });
+  B.wires.forEach(w=>drawWire(w));
+  if(B.from){ const p=tp(B.from.c,B.from.t); g.setLineDash([8,6]); g.strokeStyle='#ffd166'; g.lineWidth=3; g.beginPath(); g.moveTo(p.x,p.y); g.lineTo(B.mx,B.my); g.stroke(); g.setLineDash([]); }
+  const ht=hitTerm(B.mx,B.my);
+  B.comps.forEach(c=>c.terms.forEach((t,i)=>{ const p=tp(c,i); const hot=(ht&&ht.c===c&&ht.t===i)||(B.from&&B.from.c===c&&B.from.t===i); drawTerm(p.x,p.y,hot,t.n); }));
+  if(r&&r.short){ g.fillStyle='rgba(180,20,20,.9)'; rr(g,W/2-300,H/2-32,600,64,10); g.fill(); g.fillStyle='#fff'; g.font='700 22px '+FONT; g.textAlign='center'; g.fillText('⚠ ҚЫСҚА ТҰЙЫҚТАЛУ! Батарея қызып жатыр — сымды ажырат',W/2,H/2+8); }
+}
+function drawTerm(x,y,hot,n){
+  const g=B.g; if(hot){ g.fillStyle='rgba(255,209,102,.35)'; g.beginPath(); g.arc(x,y,20,0,7); g.fill(); }
+  g.fillStyle='#8a6a1e'; g.beginPath(); g.arc(x,y+1.5,11,0,7); g.fill();
+  g.fillStyle=hot?'#ffd166':'#d4a92c'; g.beginPath(); g.arc(x,y,11,0,7); g.fill();
+  g.fillStyle='#3a2c08'; g.beginPath(); g.arc(x,y,4,0,7); g.fill();
+  if(n){ g.fillStyle=n==='+'?'#ff6b6b':'#7fb3ff'; g.font='700 18px '+FONT; g.textAlign='center'; g.fillText(n,x,y-17); }
+}
+function drawWire(w){
+  const g=B.g, q=wireQ(w); g.lineCap='round';
+  g.strokeStyle='rgba(0,0,0,.35)'; g.lineWidth=8; g.beginPath(); g.moveTo(q.a.x,q.a.y+3); g.quadraticCurveTo(q.c.x,q.c.y+3,q.b.x,q.b.y+3); g.stroke();
+  g.strokeStyle='#111'; g.lineWidth=7; g.beginPath(); g.moveTo(q.a.x,q.a.y); g.quadraticCurveTo(q.c.x,q.c.y,q.b.x,q.b.y); g.stroke();
+  g.strokeStyle=w.col; g.lineWidth=4.5; g.beginPath(); g.moveTo(q.a.x,q.a.y); g.quadraticCurveTo(q.c.x,q.c.y,q.b.x,q.b.y); g.stroke();
+  g.strokeStyle='rgba(255,255,255,.25)'; g.lineWidth=1.2; g.beginPath(); g.moveTo(q.a.x,q.a.y-1); g.quadraticCurveTo(q.c.x,q.c.y-1,q.b.x,q.b.y-1); g.stroke();
+}
+function shadowOn(g){ g.shadowColor='rgba(0,0,0,.45)'; g.shadowBlur=14; g.shadowOffsetY=6; }
+function shadowOff(g){ g.shadowColor='transparent'; g.shadowBlur=0; g.shadowOffsetY=0; }
+function drawBattery(c){
+  const g=B.g; shadowOn(g); g.fillStyle='#22252c'; rr(g,c.x-85,c.y-45,170,90,8); g.fill(); shadowOff(g);
+  g.fillStyle='#2e323b'; rr(g,c.x-85,c.y-45,170,26,8); g.fill(); g.fillStyle='#22252c'; g.fillRect(c.x-85,c.y-30,170,12);
+  g.fillStyle='#1b1d22'; [[-60],[60]].forEach(d=>{ g.fillRect(c.x+d[0]-14,c.y-56,28,12); });
+  g.fillStyle='#ffd166'; g.font='700 30px '+FONT; g.textAlign='center'; g.fillText(`${c.E} В`,c.x,c.y+14);
+  g.fillStyle='#8f96a3'; g.font='500 11px '+FONT; g.fillText('АККУМУЛЯТОР · ТҰРАҚТЫ ТОК · DC',c.x,c.y+34);
+  g.fillStyle='#e9e4d8'; g.font='500 14px '+FONT; g.fillText(c.label,c.x,c.y+66);
+}
+function drawLamp(c){
+  const g=B.g, l=B.res&&B.res.lamps[c.id]; const target=l?l.glow:0; c.glow=lerp(c.glow,target,0.15); const glow=c.glow;
+  if(glow>0.02){ const rg=g.createRadialGradient(c.x,c.y-10,10,c.x,c.y-10,120); rg.addColorStop(0,`rgba(255,222,130,${0.6*glow})`); rg.addColorStop(1,'rgba(255,200,80,0)'); g.fillStyle=rg; g.fillRect(c.x-130,c.y-140,260,260); }
+  shadowOn(g); g.fillStyle='#2b2d33'; rr(g,c.x-30,c.y+32,60,40,6); g.fill(); shadowOff(g);
+  g.strokeStyle='#4a4d55'; g.lineWidth=2; for(let i=0;i<4;i++){ g.beginPath(); g.moveTo(c.x-26,c.y+40+i*8); g.lineTo(c.x+26,c.y+40+i*8); g.stroke(); }
+  g.strokeStyle='#8a6a1e'; g.lineWidth=3; [[-28],[28]].forEach(d=>{ g.beginPath(); g.moveTo(c.x+d[0]*0.6,c.y+70); g.lineTo(c.x+d[0],c.y+80); g.stroke(); });
+  g.fillStyle='#3a3c42'; g.fillRect(c.x-16,c.y+24,32,10);
+  const gg=g.createRadialGradient(c.x-12,c.y-26,4,c.x,c.y-10,44);
+  if(glow>0.02){ gg.addColorStop(0,'#fffbe6'); gg.addColorStop(0.45,`rgba(255,220,120,${0.55+0.45*glow})`); gg.addColorStop(1,`rgba(255,170,40,${0.35+0.5*glow})`); }
+  else { gg.addColorStop(0,'rgba(255,255,255,.6)'); gg.addColorStop(1,'rgba(170,185,210,.35)'); }
+  g.beginPath(); g.arc(c.x,c.y-10,44,0,7); g.fillStyle=gg; g.fill(); g.strokeStyle='rgba(255,255,255,.4)'; g.lineWidth=1.5; g.stroke();
+  g.strokeStyle=glow>0.02?`rgb(255,${Math.round(110+120*glow)},60)`:'#6a6a6a'; g.lineWidth=glow>0.02?2.5:1.8; g.lineJoin='round';
+  g.beginPath(); g.moveTo(c.x-9,c.y+24); g.lineTo(c.x-9,c.y-6); for(let i=0;i<5;i++) g.lineTo(c.x-9+(i+1)*3.6,c.y-6+(i%2?4:-4)); g.lineTo(c.x+9,c.y-6); g.lineTo(c.x+9,c.y+24); g.stroke();
+  g.fillStyle='#e9e4d8'; g.font='500 14px '+FONT; g.textAlign='center'; g.fillText(`${c.label} · ${c.R} Ом`,c.x,c.y+104);
+  if(l&&l.glow>0.02&&!B.res.short){ g.fillStyle='rgba(255,255,255,.55)'; g.font='12px '+MONO; g.fillText(`I = ${fmtA(l.I)} А`,c.x,c.y+120); }
+}
+function drawMeter(c){
+  const g=B.g, isA=c.kind==='ammeter', r=B.res, max=isA?10:15; const val=r?(isA?r.am:r.vm):0; const short=r&&r.short;
+  c.needle=lerp(c.needle,short?1:clamp(val/max,0,1),0.12);
+  shadowOn(g); g.fillStyle='#1f2229'; g.beginPath(); g.arc(c.x,c.y,66,0,7); g.fill(); shadowOff(g);
+  g.strokeStyle='#3a3f4a'; g.lineWidth=3; g.beginPath(); g.arc(c.x,c.y,62,0,7); g.stroke();
+  g.fillStyle='#f3edd8'; g.beginPath(); g.arc(c.x,c.y,54,0,7); g.fill();
+  const a0=-Math.PI*0.83, a1=-Math.PI*0.17, cx=c.x, cy=c.y+16;
+  g.strokeStyle='#222'; g.lineWidth=1.5; g.textAlign='center'; g.fillStyle='#222'; g.font='500 10px '+FONT;
+  for(let k=0;k<=10;k++){ const an=a0+(a1-a0)*k/10, ri=k%5?48:44, ro=52; g.beginPath(); g.moveTo(cx+Math.cos(an)*ri,cy+Math.sin(an)*ri); g.lineTo(cx+Math.cos(an)*ro,cy+Math.sin(an)*ro); g.stroke(); if(k%5===0) g.fillText(String(max*k/10),cx+Math.cos(an)*36,cy+Math.sin(an)*36+3); }
+  g.font='700 20px '+FONT; g.fillStyle='#333'; g.fillText(isA?'A':'V',cx,cy-4);
+  const an=a0+(a1-a0)*c.needle; g.strokeStyle='#c0392b'; g.lineWidth=2; g.beginPath(); g.moveTo(cx,cy); g.lineTo(cx+Math.cos(an)*50,cy+Math.sin(an)*50); g.stroke();
+  g.fillStyle='#333'; g.beginPath(); g.arc(cx,cy,4,0,7); g.fill();
+  g.fillStyle='#0d1a12'; rr(g,cx-38,cy+20,76,22,3); g.fill(); g.fillStyle=short?'#ff5a5a':'#7cf59a'; g.font='700 15px '+MONO; g.fillText(short?'!!!':(isA?fmtA(val)+' A':fmtV(val)+' V'),cx,cy+36);
+  g.strokeStyle='#8a6a1e'; g.lineWidth=3; [[-44],[44]].forEach(d=>{ g.beginPath(); g.moveTo(c.x+d[0]*0.7,c.y+56); g.lineTo(c.x+d[0],c.y+78); g.stroke(); });
+  g.fillStyle='#e9e4d8'; g.font='500 14px '+FONT; g.fillText(c.label,c.x,c.y+102);
+}
+function benchStart(){ B.open=true; solve(); const f=()=>{ if(!B.open) return; drawBench(); B.raf=requestAnimationFrame(f); }; f(); }
+function benchStop(){ B.open=false; cancelAnimationFrame(B.raf); }
+
+
+/* ================= ЖЕЛІ: ТЕЛЕФОН-ДЖОЙСТИК ================= */
+/* Екі арна: 1) relay — server.py (жергілікті Wi-Fi, интернетсіз); 2) PeerJS/WebRTC — файл интернетте тұрса. */
+const NET={mode:null,room:null,connected:false,phones:{},peer:null,conns:[],since:{c2h:-1,h2c:-1},pending:null,inflight:false,lastState:'',onmsg:null,
+  send(msg){ if(!this.mode) return; if(this.mode==='relay') relaySend(msg); else if(this.mode==='peer') peerSend(msg); },
+  tick(){ /* хост: күй өзгерсе телефондарға жіберу */
+    if(IS_CTRL||!this.mode) return;
+    const prompt=hover?promptFor(hover).replace(/<[^>]+>/g,' ').trim():'';
+    const st={t:'state',state:S.state,lightOn:S.lightOn,unlocked:S.unlocked,prompt,hot:!!hover};
+    const key=JSON.stringify(st); if(key!==this.lastState){ this.lastState=key; this.send(st); }
+    const now=performance.now(); for(const id in this.phones) if(now-this.phones[id]>4000) delete this.phones[id];
+    const n=Object.keys(this.phones).length;
+    if(n!==this._n){
+      const grew=n>(this._n||0); this._n=n; updateNetStatus();
+      const rb=$('#remoteBtn'); rb.textContent=n>0?'📱 '+n:'📱'; rb.classList.toggle('on',n>0);
+      if(grew){ toast('📱 Телефон қосылды ('+n+'). Экранды телефон басқарады.',3000);
+        if(!$('#remote').classList.contains('hidden')) setTimeout(()=>{ $('#remote').classList.add('hidden'); },1200); }
+    }
+    if(n>0) $('#paused').classList.add('hidden');
+  }};
+const sleep=ms=>new Promise(r=>setTimeout(r,ms));
+const MY_ID=Math.random().toString(36).slice(2,8);
+function makeRoom(){ const A='ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; let s=''; for(let i=0;i<4;i++) s+=A[Math.floor(Math.random()*A.length)]; return s; }
+function relayUrl(p){ return '/relay/'+p; }
+
+/* ---- relay (server.py) ---- */
+async function relayProbe(){ try{ const r=await fetch(relayUrl('ping'),{cache:'no-store'}); const d=await r.json(); if(d.host) NET.lanHost=d.host; return !!d.ok; }catch(e){ return false; } }
+async function relayLoop(ch){
+  let since=-1, fails=0;
+  while(NET.mode==='relay'){
+    try{
+      const r=await fetch(relayUrl('recv')+`?room=${NET.room}&ch=${ch}&since=${since}`,{cache:'no-store'});
+      const d=await r.json(); since=d.seq; fails=0; NET.setConn(true);
+      d.msgs.forEach(m=>NET.onmsg&&NET.onmsg(m));
+    }catch(e){ fails++; if(fails>=2) NET.setConn(false); await sleep(Math.min(3000,500*fails)); }
+  }
+}
+function relaySend(msg){
+  const ch=IS_CTRL?'c2h':'h2c';
+  if(IS_CTRL&&msg.t==='j'){ NET.pending=msg; if(NET.inflight) return; }     // джойстикті біріктіру
+  const go=async()=>{ NET.inflight=true;
+    while(true){ const m=(NET.pending&&msg.t==='j')?NET.pending:msg; NET.pending=null;
+      try{ await fetch(relayUrl('send')+`?room=${NET.room}&ch=${ch}`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(IS_CTRL?{...m,id:MY_ID}:m)}); }catch(e){}
+      if(!NET.pending) break; }
+    NET.inflight=false; };
+  if(IS_CTRL&&msg.t==='j') go(); else fetch(relayUrl('send')+`?room=${NET.room}&ch=${ch}`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(IS_CTRL?{...msg,id:MY_ID}:msg)}).catch(()=>{});
+}
+
+/* ---- PeerJS (WebRTC) ---- */
+function peerId(room){ return 'fizlab-'+room; }
+function peerSend(msg){ const d=IS_CTRL?{...msg,id:MY_ID}:msg; NET.conns.forEach(c=>{ if(c.open) try{ c.send(d); }catch(e){} }); }
+function peerHost(){
+  if(!window.Peer) return false;
+  const p=new Peer(peerId(NET.room)); NET.peer=p;
+  p.on('open',()=>{ NET.setConn(true); updateNetStatus(); });
+  p.on('connection',c=>{ NET.conns.push(c); c.on('data',m=>NET.onmsg&&NET.onmsg(m)); c.on('close',()=>{ NET.conns=NET.conns.filter(x=>x!==c); }); });
+  p.on('error',e=>{ if(e.type==='unavailable-id'){ newRoom(); } else { NET.setConn(false); updateNetStatus('PeerJS қатесі: '+e.type); } });
+  return true;
+}
+function peerCtrl(){
+  if(!window.Peer) return false;
+  const p=new Peer(); NET.peer=p;
+  const connect=()=>{ const c=p.connect(peerId(NET.room),{reliable:true}); NET.conns=[c];
+    c.on('open',()=>{ NET.setConn(true); NET.send({t:'hi'}); });
+    c.on('data',m=>NET.onmsg&&NET.onmsg(m));
+    c.on('close',()=>{ NET.setConn(false); setTimeout(connect,2000); });
+    c.on('error',()=>{ NET.setConn(false); setTimeout(connect,3000); }); };
+  p.on('open',connect); p.on('error',()=>{ NET.setConn(false); setTimeout(()=>{ if(!NET.connected) connect(); },3000); });
+  return true;
+}
+
+/* ================= ХОСТ (үлкен экран) ================= */
+function updateNetStatus(err){
+  const el=$('#netStatus'); if(!el) return;
+  const n=Object.keys(NET.phones).length;
+  if(err){ el.innerHTML=err; return; }
+  if(!NET.mode){ el.textContent='Байланыс арнасы ізделуде…'; return; }
+  el.innerHTML=(NET.mode==='relay'?'Арна: жергілікті сервер (Wi-Fi)':'Арна: интернет (WebRTC)')+' · '+(NET.connected?'<b>дайын</b>':'қосылуда…')+` · қосылған телефон: <b>${n}</b>`;
+}
+function ctrlUrl(){ let origin=location.origin; if(NET.lanHost&&/^(localhost|127\.)/.test(location.hostname)) origin='http://'+NET.lanHost; return origin+location.pathname+'#c='+NET.room; }
+function drawQR(){
+  const box=$('#qr'); box.innerHTML='';
+  const url=ctrlUrl(); $('#roomUrl').textContent=url; $('#roomCode').textContent=NET.room;
+  if(location.protocol==='file:'){ box.innerHTML='<div style="color:#333;font-size:13px;text-align:center;padding:10px">QR жоқ:<br>файл тікелей ашылған</div>'; return; }
+  if(window.QRCode){ try{ new QRCode(box,{text:url,width:212,height:212,correctLevel:QRCode.CorrectLevel.M}); return; }catch(e){} }
+  box.innerHTML='<div style="color:#333;font-size:13px;text-align:center;padding:10px">QR кітапханасы жоқ.<br>Сілтемені қолмен енгізіңіз.</div>';
+}
+NET.setConn=function(on){ if(this.connected!==on){ this.connected=on; updateNetStatus(); if(IS_CTRL) ctrlConn(on); } };
+function hostOnMsg(m){
+  if(!m||typeof m!=='object') return;
+  if(m.id) NET.phones[m.id]=performance.now();
+  switch(m.t){
+    case 'hi': NET.send({t:'hello',task:TASK}); NET.lastState=''; if(S.state==='bench') NET.send({t:'bsync',...benchState()}); break;
+    case 'j': if(S.state==='play'){ RJ.x=clamp(m.x||0,-1,1); RJ.z=clamp(m.z||0,-1,1); RJ.ts=performance.now(); if(m.lx||m.ly){ P.yaw-=m.lx*0.0045; P.pitch=clamp(P.pitch-m.ly*0.0045,-1.45,1.45); } } break;
+    case 'run': RJ.run=!!m.on; break;
+    case 'act': if(S.state==='play') interact(); break;
+    case 'start': $('#remote').classList.add('hidden'); if(S.state==='intro') startGame(); break;
+    case 'close': if(S.state==='bench'||S.state==='pc') closeOverlay(); break;
+    case 'hint': S.hints++; break;
+    case 'b': if(S.state==='bench') applyBenchOp(m); break;
+    case 'code': if(S.state==='pc'){ $('#codeInput').value=String(m.v||''); submitCodeValue(String(m.v||'')); } break;
+    case 'again': location.reload(); break;
+  }
+}
+function newRoom(){
+  NET.room=makeRoom(); try{ sessionStorage.setItem('fizlab-room',NET.room); }catch(e){}
+  if(NET.mode==='peer'){ NET.conns=[]; if(NET.peer){ try{ NET.peer.destroy(); }catch(e){} } peerHost(); }
+  drawQR(); updateNetStatus();
+}
+async function netHostInit(){
+  NET.onmsg=hostOnMsg;
+  setInterval(()=>{ try{ NET.tick(); }catch(e){} },250);   // фондық қойындыда да жұмыс істеуі үшін
+  try{ NET.room=sessionStorage.getItem('fizlab-room')||makeRoom(); sessionStorage.setItem('fizlab-room',NET.room); }catch(e){ NET.room=makeRoom(); }
+  drawQR();
+  const open=()=>{ $('#remote').classList.remove('hidden'); if(document.pointerLockElement) document.exitPointerLock(); drawQR(); updateNetStatus(); };
+  $('#remoteBtn').onclick=open; $('#remoteBtn2').onclick=open;
+  $('#remoteClose').onclick=()=>{ $('#remote').classList.add('hidden'); if(S.state==='play') lockPointer(); };
+  $('#remoteNew').onclick=newRoom;
+  const warn=$('#netWarn');
+  if(location.protocol==='file:'){
+    warn.classList.remove('hidden');
+    warn.innerHTML='Файл компьютерден тікелей ашылған — телефон оған кіре алмайды.<br>Телефонмен басқару үшін: <b>start.bat</b> файлын іске қосып, ол көрсеткен <b>http://…:8080/</b> сілтемесін панельде ашыңыз (интернет керек емес). Немесе папканы интернетке (GitHub Pages) орналастырыңыз.';
+  }
+  if(await relayProbe()){ NET.mode='relay'; relayLoop('c2h'); NET.setConn(true); drawQR(); }
+  else if(location.protocol!=='file:'&&peerHost()){ NET.mode='peer'; warn.classList.remove('hidden'); warn.innerHTML='Жергілікті сервер табылмады — интернет арқылы (WebRTC) қосылу қолданылады. Телефонда да интернет болуы керек.'; }
+  else { NET.mode=null; updateNetStatus(location.protocol==='file:'?'Байланыс арнасы жоқ (файл тікелей ашылған)':'Байланыс арнасы жоқ'); }
+  updateNetStatus();
+}
+
+/* ================= ТЕЛЕФОН (controller) ================= */
+const CJ={x:0,z:0,lx:0,ly:0,id:null,lookId:null,lkx:0,lky:0,run:false,dirty:false};
+let cState='wait';
+function ctrlConn(on){ $('#cDot').classList.toggle('on',on); $('#cStatus').textContent=on?'қосылды':'қосылуда…'; if(on){ NET.send({t:'hi'}); } else { $('#cWaitTitle').textContent='Байланыс жоқ'; $('#cWaitText').textContent='Wi-Fi қосулы ма? Үлкен экрандағы ойын ашық па? Қайта қосылуда…'; showPane('wait'); } }
+function showPane(p){ $('#cWait').classList.toggle('on',p==='wait'); $('#cPlay').classList.toggle('on',p==='play'); }
+function ctrlApplyState(st){
+  const prev=cState; cState=st.state; S.unlocked=!!st.unlocked; S.lightOn=!!st.lightOn;
+  $('#bench').classList.toggle('hidden',st.state!=='bench'); $('#pc').classList.toggle('hidden',st.state!=='pc');
+  if(st.state!=='win') $('#win').classList.add('hidden');
+  if(prev!=='bench'&&st.state==='bench'){ benchStart(); }
+  if(prev==='bench'&&st.state!=='bench'){ benchStop(); }
+  if(st.state==='pc'&&prev!=='pc'){ renderPC(); pcMsg('',''); setTimeout(()=>$('#codeInput').focus(),150); }
+  if(st.state==='intro'){ showPane('wait'); $('#cWaitTitle').textContent='Дайын!'; $('#cWaitText').textContent='Ойын үлкен экранда. Бастау үшін төмендегі батырманы бас немесе мұғалімнің бастауын күт.'; $('#cStart').classList.remove('hidden'); }
+  else if(st.state==='play'){ showPane('play'); $('#cStart').classList.add('hidden'); }
+  else { showPane(st.state==='win'?'wait':'play'); $('#cStart').classList.add('hidden'); if(st.state==='win'){ $('#cWaitTitle').textContent='Ойын аяқталды'; $('#cWaitText').textContent='Нәтиже үлкен экранда.'; } }
+  const pr=$('#cPrompt'); if(st.prompt){ pr.innerHTML='<b>E</b>'+st.prompt.replace(/^E\s*/,''); pr.classList.add('show'); } else pr.classList.remove('show');
+  $('#cAct').classList.toggle('hot',!!st.hot);
+}
+function ctrlOnMsg(m){
+  if(!m||typeof m!=='object') return;
+  switch(m.t){
+    case 'hello': setTask(m.task); break;
+    case 'state': ctrlApplyState(m); break;
+    case 'bsync': applyBenchState(m); break;
+    case 'pcmsg': pcMsg(m.m,m.cls); if(m.cls==='err'){ const c=$('.crt'); c.classList.remove('shake'); void c.offsetWidth; c.classList.add('shake'); } break;
+    case 'win': $('#winTime').textContent=m.time; $('#winTries').textContent=m.tries; $('#winHints').textContent=m.hints; $('#winStars').textContent=m.stars; $('#winExpl').textContent=m.expl; $('#bench').classList.add('hidden'); $('#pc').classList.add('hidden'); $('#win').classList.remove('hidden'); break;
+  }
+}
+async function ctrlInit(){
+  NET.room=CTRL_ROOM.toUpperCase(); NET.onmsg=ctrlOnMsg; $('#cRoom').textContent=NET.room; showPane('wait'); S.touchUI=true;
+  $('#hintBtn').addEventListener('click',()=>NET.send({t:'hint'}));
+  document.body.classList.add('ctrl');
+  // джойстик
+  const joy=$('#cJoy'), knob=$('#cKnob'), R=46;
+  const upd=e=>{ const r=joy.getBoundingClientRect(); let dx=e.clientX-(r.left+r.width/2), dy=e.clientY-(r.top+r.height/2); const L=Math.hypot(dx,dy); if(L>R){ dx*=R/L; dy*=R/L; } knob.style.transform=`translate(${dx}px,${dy}px)`; CJ.x=dx/R; CJ.z=-dy/R; CJ.dirty=true; };
+  joy.addEventListener('pointerdown',e=>{ e.preventDefault(); CJ.id=e.pointerId; try{ joy.setPointerCapture(e.pointerId); }catch(err){} upd(e); });
+  joy.addEventListener('pointermove',e=>{ if(e.pointerId===CJ.id) upd(e); });
+  const jend=e=>{ if(e.pointerId!==CJ.id) return; CJ.id=null; CJ.x=CJ.z=0; knob.style.transform=''; CJ.dirty=true; };
+  joy.addEventListener('pointerup',jend); joy.addEventListener('pointercancel',jend);
+  // қарау
+  const lk=$('#cLook');
+  lk.addEventListener('pointerdown',e=>{ e.preventDefault(); if(CJ.lookId!==null) return; CJ.lookId=e.pointerId; CJ.lkx=e.clientX; CJ.lky=e.clientY; try{ lk.setPointerCapture(e.pointerId); }catch(err){} });
+  lk.addEventListener('pointermove',e=>{ if(e.pointerId!==CJ.lookId) return; CJ.lx+=e.clientX-CJ.lkx; CJ.ly+=e.clientY-CJ.lky; CJ.lkx=e.clientX; CJ.lky=e.clientY; CJ.dirty=true; });
+  const lend=e=>{ if(e.pointerId===CJ.lookId) CJ.lookId=null; };
+  lk.addEventListener('pointerup',lend); lk.addEventListener('pointercancel',lend);
+  $('#cAct').addEventListener('pointerdown',e=>{ e.preventDefault(); NET.send({t:'act'}); if(navigator.vibrate) navigator.vibrate(15); });
+  $('#cRun').addEventListener('pointerdown',e=>{ e.preventDefault(); CJ.run=!CJ.run; $('#cRun').classList.toggle('on',CJ.run); NET.send({t:'run',on:CJ.run}); });
+  $('#cStart').addEventListener('click',()=>{ NET.send({t:'start'}); const p=document.documentElement.requestFullscreen&&document.documentElement.requestFullscreen(); if(p&&p.catch) p.catch(()=>{}); });
+  $('#againBtn').onclick=()=>NET.send({t:'again'});
+  // 25 Гц: джойстик + қарау
+  let hb=0;
+  setInterval(()=>{ if(!NET.connected) return; hb++; if(CJ.dirty||CJ.lx||CJ.ly||hb%12===0){ NET.send({t:'j',x:+CJ.x.toFixed(2),z:+CJ.z.toFixed(2),lx:Math.round(CJ.lx),ly:Math.round(CJ.ly)}); CJ.lx=CJ.ly=0; CJ.dirty=false; } },40);
+  // арна
+  if(await relayProbe()){ NET.mode='relay'; relayLoop('h2c'); }
+  else if(peerCtrl()){ NET.mode='peer'; }
+  else { $('#cWaitTitle').textContent='Қосылу мүмкін емес'; $('#cWaitText').textContent='Сервер табылмады және интернет арнасы жоқ.'; }
+  // ұйқыға кетпеу
+  try{ if(navigator.wakeLock) navigator.wakeLock.request('screen').catch(()=>{}); }catch(e){}
+}
+/* ================= ІСКЕ ҚОСУ ================= */
+function init(){ benchInit(); if(IS_CTRL){ ctrlInit(); return; } buildScene(); netHostInit(); loop(performance.now()); }
+const fontsReady=(document.fonts&&document.fonts.ready)?document.fonts.ready:Promise.resolve();
+Promise.race([fontsReady,new Promise(r=>setTimeout(r,2500))]).then(init);
+window.__game={S,B,P,get TASK(){return TASK;},solve,openBench,openPC,setLight,closeOverlay,unlock,setTouchUI,JOY,RJ,NET:()=>NET};
+})();
+</script>
+</body>
+</html>
